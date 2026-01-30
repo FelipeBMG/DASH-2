@@ -142,15 +142,19 @@ export function FluxoOperacoesModule() {
                   onDragStart={() => handleDragStart(card)}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="bg-card border border-border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-all group"
+                  className="group relative cursor-grab active:cursor-grabbing rounded-xl border border-border/60 bg-card/70 p-3.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card/80 hover:shadow-md"
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <GripVertical className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <GripVertical className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 opacity-0 transition-opacity hover:bg-secondary/60 group-hover:opacity-100"
+                        >
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -171,33 +175,35 @@ export function FluxoOperacoesModule() {
                   </div>
 
                   {/* Card Content */}
-                  <div className="mt-1 space-y-2">
-                    <h4 className="font-semibold text-foreground text-sm truncate">
+                  <div className="mt-2 space-y-2">
+                    <h4 className="text-sm font-semibold leading-snug text-foreground truncate">
                       {card.clientName}
                     </h4>
                     
-                    <div className="flex items-center gap-1 text-primary font-medium text-sm">
-                      <DollarSign className="w-3 h-3" />
+                    <div className="flex items-center gap-1.5 text-sm font-medium text-primary">
+                      <DollarSign className="h-3.5 w-3.5" />
                       {formatCurrency(card.entryValue)}
                     </div>
 
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <User className="w-3 h-3" />
-                      {card.attendantName}
-                    </div>
-
-                    {card.deadline && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Calendar className="w-3 h-3" />
-                        {format(parseISO(card.deadline), 'dd/MM/yyyy', { locale: ptBR })}
+                    <div className="grid gap-1.5">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <User className="h-3.5 w-3.5" />
+                        <span className="truncate">{card.attendantName}</span>
                       </div>
-                    )}
+
+                      {card.deadline && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>{format(parseISO(card.deadline), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               ))}
 
               {getCardsByStatus(column.id).length === 0 && (
-                <div className="h-24 flex items-center justify-center text-muted-foreground text-sm border-2 border-dashed border-border rounded-lg">
+                <div className="h-24 rounded-xl border border-dashed border-border/70 bg-secondary/20 flex items-center justify-center text-muted-foreground text-sm">
                   Arraste cards aqui
                 </div>
               )}
