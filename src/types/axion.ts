@@ -93,6 +93,9 @@ export interface CalendarEvent {
 }
 
 export interface Settings {
+  name: string;
+  email: string;
+  phone: string;
   companyName: string;
   taxRate: number;
   currency: string;
