@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,6 +45,35 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
     notes: card?.notes || '',
   });
 
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreviewUrl(null);
+      return;
+    }
+
+    const url = URL.createObjectURL(imageFile);
+    setImagePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [imageFile]);
+
+  useEffect(() => {
+    if (!audioFile) {
+      setAudioPreviewUrl(null);
+      return;
+    }
+
+    const url = URL.createObjectURL(audioFile);
+    setAudioPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [audioFile]);
+
+  const teamOptions = useMemo(() => team, [team]);
+
   const handleTeamMemberChange = (field: 'attendant' | 'production', memberId: string) => {
     const member = team.find(m => m.id === memberId);
     if (member) {
@@ -70,24 +99,30 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <h2 className="text-xl font-bold text-foreground">
-        {card ? 'Editar Card' : 'Novo Card'}
-      </h2>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <header className="space-y-1">
+        <h2 className="text-xl font-bold text-foreground">
+          {card ? 'Editar Card' : 'Novo Card'}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Preencha os dados do lead e do processo. (Uploads serão integrados futuramente.)
+        </p>
+      </header>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Data</Label>
+      <section className="glass-card p-4 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Data</Label>
           <Input
             type="date"
             value={formData.date}
             onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
             required
           />
-        </div>
+          </div>
 
-        <div className="space-y-2">
-          <Label>Status</Label>
+          <div className="space-y-2">
+            <Label>Status</Label>
           <Select
             value={formData.status}
             onValueChange={(value: FlowCardStatus) => setFormData(prev => ({ ...prev, status: value }))}
@@ -103,110 +138,160 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
               ))}
             </SelectContent>
           </Select>
+          </div>
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label>Cliente</Label>
-        <Input
-          value={formData.clientName}
-          onChange={(e) => setFormData(prev => ({ ...prev, clientName: e.target.value }))}
-          placeholder="Nome do cliente"
-          required
-        />
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
-          <Label>Leads</Label>
+          <Label>Cliente</Label>
           <Input
-            type="number"
-            min="0"
-            value={formData.leadsCount}
-            onChange={(e) => setFormData(prev => ({ ...prev, leadsCount: Number(e.target.value) }))}
+            value={formData.clientName}
+            onChange={(e) => setFormData(prev => ({ ...prev, clientName: e.target.value }))}
+            placeholder="Nome do cliente"
+            required
           />
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label>Leads</Label>
+            <Input
+              type="number"
+              min="0"
+              value={formData.leadsCount}
+              onChange={(e) => setFormData(prev => ({ ...prev, leadsCount: Number(e.target.value) }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Quantidade</Label>
+            <Input
+              type="number"
+              min="1"
+              value={formData.quantity}
+              onChange={(e) => setFormData(prev => ({ ...prev, quantity: Number(e.target.value) }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Valor de Entrada (R$)</Label>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.entryValue}
+              onChange={(e) => setFormData(prev => ({ ...prev, entryValue: Number(e.target.value) }))}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Atendente (Colaborador)</Label>
+            <Select
+              value={formData.attendantId}
+              onValueChange={(value) => handleTeamMemberChange('attendant', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o atendente" />
+              </SelectTrigger>
+              <SelectContent>
+                {teamOptions.map(member => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {member.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Produção (Responsável Técnico)</Label>
+            <Select
+              value={formData.productionResponsibleId}
+              onValueChange={(value) => handleTeamMemberChange('production', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o responsável" />
+              </SelectTrigger>
+              <SelectContent>
+                {teamOptions.map(member => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {member.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Prazo de Entrega</Label>
+            <Input
+              type="date"
+              value={formData.deadline}
+              onChange={(e) => setFormData(prev => ({ ...prev, deadline: e.target.value }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Uploads (Imagem / Áudio)</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                />
+                {imagePreviewUrl ? (
+                  <div className="rounded-lg border border-border/60 bg-secondary/20 p-2">
+                    <img
+                      src={imagePreviewUrl}
+                      alt="Prévia da imagem selecionada"
+                      className="h-24 w-full object-cover rounded-md"
+                      loading="lazy"
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground truncate">
+                      {imageFile?.name}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Sem imagem selecionada</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Input
+                  type="file"
+                  accept="audio/*"
+                  onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+                />
+                {audioFile ? (
+                  <div className="rounded-lg border border-border/60 bg-secondary/20 p-2">
+                    <audio controls className="w-full">
+                      {audioPreviewUrl ? <source src={audioPreviewUrl} /> : null}
+                    </audio>
+                    <p className="mt-2 text-xs text-muted-foreground truncate">{audioFile.name}</p>
+                    <p className="text-[11px] text-muted-foreground">(Arquivo não é salvo ainda)</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Sem áudio selecionado</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="space-y-2">
-          <Label>Quantidade</Label>
-          <Input
-            type="number"
-            min="1"
-            value={formData.quantity}
-            onChange={(e) => setFormData(prev => ({ ...prev, quantity: Number(e.target.value) }))}
+          <Label>Observações</Label>
+          <Textarea
+            value={formData.notes}
+            onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+            placeholder="Notas sobre o card..."
+            rows={3}
           />
         </div>
-
-        <div className="space-y-2">
-          <Label>Valor de Entrada (R$)</Label>
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            value={formData.entryValue}
-            onChange={(e) => setFormData(prev => ({ ...prev, entryValue: Number(e.target.value) }))}
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Atendente (Colaborador)</Label>
-          <Select
-            value={formData.attendantId}
-            onValueChange={(value) => handleTeamMemberChange('attendant', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione o atendente" />
-            </SelectTrigger>
-            <SelectContent>
-              {team.map(member => (
-                <SelectItem key={member.id} value={member.id}>
-                  {member.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Produção (Responsável Técnico)</Label>
-          <Select
-            value={formData.productionResponsibleId}
-            onValueChange={(value) => handleTeamMemberChange('production', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecione o responsável" />
-            </SelectTrigger>
-            <SelectContent>
-              {team.map(member => (
-                <SelectItem key={member.id} value={member.id}>
-                  {member.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Prazo de Entrega</Label>
-        <Input
-          type="date"
-          value={formData.deadline}
-          onChange={(e) => setFormData(prev => ({ ...prev, deadline: e.target.value }))}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Observações</Label>
-        <Textarea
-          value={formData.notes}
-          onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-          placeholder="Notas sobre o card..."
-          rows={3}
-        />
-      </div>
+      </section>
 
       <div className="flex justify-end gap-3 pt-4">
         <Button type="button" variant="outline" onClick={onCancel}>
