@@ -61,6 +61,9 @@ const defaultUser: User = {
 };
 
 const defaultSettings: Settings = {
+  name: 'Felipe',
+  email: 'felipe@email.com',
+  phone: '',
   companyName: 'AXION Agency',
   taxRate: 15,
   currency: 'BRL',
