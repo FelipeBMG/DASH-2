@@ -99,8 +99,11 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <header className="space-y-1">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-5 px-1 sm:px-2 md:px-0"
+    >
+      <header className="space-y-1 px-1 sm:px-2 md:px-0">
         <h2 className="text-xl font-bold text-foreground">
           {card ? 'Editar Card' : 'Novo Card'}
         </h2>
@@ -109,9 +112,9 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
         </p>
       </header>
 
-      <section className="glass-card p-4 space-y-4">
+      <section className="glass-card p-5 sm:p-6 space-y-4 overflow-hidden">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label>Data</Label>
           <Input
             type="date"
@@ -121,7 +124,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
           />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label>Status</Label>
           <Select
             value={formData.status}
@@ -141,7 +144,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
           <Label>Cliente</Label>
           <Input
             value={formData.clientName}
@@ -152,7 +155,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label>Leads</Label>
             <Input
               type="number"
@@ -162,7 +165,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label>Quantidade</Label>
             <Input
               type="number"
@@ -172,7 +175,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label>Valor de Entrada (R$)</Label>
             <Input
               type="number"
@@ -185,7 +188,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label>Atendente (Colaborador)</Label>
             <Select
               value={formData.attendantId}
@@ -204,7 +207,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label>Produção (Responsável Técnico)</Label>
             <Select
               value={formData.productionResponsibleId}
@@ -225,7 +228,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label>Prazo de Entrega</Label>
             <Input
               type="date"
@@ -234,14 +237,15 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             <Label>Uploads (Imagem / Áudio)</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+              <div className="space-y-2 min-w-0">
                 <Input
                   type="file"
                   accept="image/*"
                   onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  className="min-w-0"
                 />
                 {imagePreviewUrl ? (
                   <div className="rounded-lg border border-border/60 bg-secondary/20 p-2">
@@ -260,11 +264,12 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
                 )}
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Input
                   type="file"
                   accept="audio/*"
                   onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+                  className="min-w-0"
                 />
                 {audioFile ? (
                   <div className="rounded-lg border border-border/60 bg-secondary/20 p-2">
@@ -282,7 +287,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
           <Label>Observações</Label>
           <Textarea
             value={formData.notes}
