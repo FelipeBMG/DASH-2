@@ -5,22 +5,75 @@ import { ClipboardList, Handshake, PhoneCall } from "lucide-react";
 import { MetricCard } from "@/components/common/MetricCard";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { vendedorMockAtendimentos, vendedorMockRanking } from "@/components/vendedor/mock";
+import { vendedorMockRanking } from "@/components/vendedor/mock";
 import { VendedorRankingCard } from "@/components/vendedor/VendedorRankingCard";
+import { useAxion } from "@/contexts/AxionContext";
+import type { FlowCardStatus } from "@/types/axion";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+const STATUS_LABEL: Record<FlowCardStatus, string> = {
+  leads: "Leads (Entrada)",
+  negociacao: "Negociação (X1)",
+  aguardando_pagamento: "Aguardando Pagamento",
+  em_producao: "Em Produção",
+  revisao: "Revisão",
+  concluido: "Concluído",
+};
+
+function statusBadgeClass(status: FlowCardStatus) {
+  // Só tokens/cores semânticas
+  switch (status) {
+    case "leads":
+      return "border-muted bg-muted/40 text-foreground";
+    case "negociacao":
+      return "border-primary/30 bg-primary/10 text-primary";
+    case "aguardando_pagamento":
+      return "border-warning/30 bg-warning/10 text-warning";
+    case "em_producao":
+      return "border-success/30 bg-success/10 text-success";
+    case "revisao":
+      return "border-accent/30 bg-accent/10 text-accent";
+    case "concluido":
+      return "border-success/30 bg-success/10 text-success";
+    default:
+      return "border-muted bg-muted/40 text-foreground";
+  }
+}
+
 export function VendedorAtendimentoPanel() {
-  const atendimentos = vendedorMockAtendimentos;
+  const { flowCards } = useAxion();
+
+  // Requisito: "Só meus cards" (vendedor)
+  const myActiveCards = useMemo(() => {
+    const todayISO = new Date().toISOString().split("T")[0];
+
+    return flowCards
+      .filter((c) => c.status !== "concluido")
+      .filter((c) => c.attendantName?.trim().toLowerCase() === "vendedor")
+      .map((c) => {
+        const dueISO = c.deadline || c.date || todayISO;
+        return {
+          id: c.id,
+          client: c.clientName,
+          stage: c.status as FlowCardStatus,
+          value: c.entryValue,
+          nextAction: "Acompanhar",
+          dueDate: dueISO,
+        };
+      })
+      .sort((a, b) => b.dueDate.localeCompare(a.dueDate));
+  }, [flowCards]);
 
   const summary = useMemo(() => {
-    const totalValue = atendimentos.reduce((sum, a) => sum + a.value, 0);
-    const active = atendimentos.length;
-    const today = atendimentos.filter((a) => a.dueDate === new Date().toISOString().split("T")[0]).length;
+    const todayISO = new Date().toISOString().split("T")[0];
+    const totalValue = myActiveCards.reduce((sum, a) => sum + a.value, 0);
+    const active = myActiveCards.length;
+    const today = myActiveCards.filter((a) => a.dueDate === todayISO).length;
     return { totalValue, active, today };
-  }, [atendimentos]);
+  }, [myActiveCards]);
 
   return (
     <div className="space-y-6">
@@ -56,13 +109,19 @@ export function VendedorAtendimentoPanel() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Painel de Atendimento</h2>
-                <p className="text-sm text-muted-foreground">Gerencie atendimentos ativos (mock)</p>
+                <p className="text-sm text-muted-foreground">Atendimentos ativos vindos do Fluxo de Operações</p>
               </div>
               <Button variant="outline">Novo atendimento</Button>
             </div>
 
             <div className="mt-5 grid grid-cols-1 gap-3">
-              {atendimentos.map((a) => (
+              {myActiveCards.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/70 bg-secondary/20 p-6 text-sm text-muted-foreground">
+                  Nenhum card atribuído ao vendedor em andamento. Crie/mova um card no Fluxo e atribua o atendente como “vendedor”.
+                </div>
+              ) : null}
+
+              {myActiveCards.map((a) => (
                 <div
                   key={a.id}
                   className="rounded-xl border border-border bg-secondary/40 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
@@ -76,18 +135,10 @@ export function VendedorAtendimentoPanel() {
                     <span
                       className={cn(
                         "text-[10px] font-medium px-2 py-1 rounded-full border",
-                        a.stage === "Novo"
-                          ? "border-muted bg-muted/40 text-foreground"
-                          : a.stage === "Qualificação"
-                            ? "border-primary/30 bg-primary/10 text-primary"
-                            : a.stage === "Proposta"
-                              ? "border-warning/30 bg-warning/10 text-warning"
-                              : a.stage === "Negociação"
-                                ? "border-success/30 bg-success/10 text-success"
-                                : "border-success/30 bg-success/10 text-success",
+                        statusBadgeClass(a.stage),
                       )}
                     >
-                      {a.stage}
+                      {STATUS_LABEL[a.stage]}
                     </span>
                     <span className="text-xs text-muted-foreground">{formatBRL(a.value)}</span>
                     <span className="text-xs text-muted-foreground">•</span>
