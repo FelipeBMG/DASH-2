@@ -5,7 +5,7 @@ export type AuthState = {
   user?: {
     id: string;
     name: string;
-    role: "admin" | "seller";
+    role: "admin" | "seller" | "production";
   };
 };
 
@@ -18,7 +18,10 @@ export function getAuthState(): AuthState {
     return {
       isAuthenticated: Boolean(parsed.isAuthenticated),
       user:
-        user && typeof user.id === "string" && typeof user.name === "string" && (user.role === "admin" || user.role === "seller")
+        user &&
+        typeof user.id === "string" &&
+        typeof user.name === "string" &&
+        (user.role === "admin" || user.role === "seller" || user.role === "production")
           ? user
           : undefined,
     };

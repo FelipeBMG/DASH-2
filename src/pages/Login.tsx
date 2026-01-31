@@ -80,12 +80,17 @@ export default function Login() {
     const user = {
       id: entry.id,
       name: entry.name,
-      role: entry.role === "admin" ? ("admin" as const) : ("seller" as const),
+      role:
+        entry.role === "admin"
+          ? ("admin" as const)
+          : entry.role === "producao"
+            ? ("production" as const)
+            : ("seller" as const),
     };
 
     setAuthUser(user);
     setAuthenticated(true);
-    const destination = user.role === "seller" ? "/vendedor" : redirectTo;
+    const destination = user.role === "seller" ? "/vendedor" : user.role === "production" ? "/producao" : redirectTo;
     navigate(destination, { replace: true });
   };
 

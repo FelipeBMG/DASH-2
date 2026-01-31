@@ -38,7 +38,7 @@ const collaboratorSchema = z.object({
     .min(3, "Username muito curto")
     .max(32, "Username muito longo")
     .regex(/^[a-zA-Z0-9._-]+$/, "Use apenas letras, números, . _ -"),
-  role: z.enum(["vendedor", "admin"]),
+  role: z.enum(["vendedor", "producao", "admin"]),
   commissionPercent: z
     .number({ invalid_type_error: "Comissão % inválida" })
     .min(0, "Comissão % mínima é 0")
@@ -127,6 +127,9 @@ export function SellersManager() {
     const password = generatePassword(12);
     await upsertCredential({ userId: id, username: parsed.data.username, password });
 
+    const commissionPercent = parsed.data.role === "producao" ? null : parsed.data.commissionPercent;
+    const commissionFixed = parsed.data.role === "producao" ? null : parsed.data.commissionFixed;
+
     setSellers((prev) => [
       ...prev,
       {
@@ -134,8 +137,8 @@ export function SellersManager() {
         name: parsed.data.name,
         username: parsed.data.username,
         role: parsed.data.role,
-        commissionPercent: parsed.data.commissionPercent,
-        commissionFixed: parsed.data.commissionFixed,
+        commissionPercent,
+        commissionFixed,
       },
     ]);
 
@@ -249,8 +252,8 @@ export function SellersManager() {
               name: parsed.data.name,
               username: parsed.data.username,
               role: parsed.data.role,
-              commissionPercent: parsed.data.commissionPercent,
-              commissionFixed: parsed.data.commissionFixed,
+                commissionPercent: parsed.data.role === "producao" ? null : parsed.data.commissionPercent,
+                commissionFixed: parsed.data.role === "producao" ? null : parsed.data.commissionFixed,
             }
           : s
       )
@@ -305,6 +308,7 @@ export function SellersManager() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="vendedor">Vendedor</SelectItem>
+                <SelectItem value="producao">Produção</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
               </SelectContent>
             </Select>
@@ -319,6 +323,7 @@ export function SellersManager() {
               onChange={(e) => setCreateCommissionPercent(e.target.value)}
               placeholder="Ex: 5"
               className="input-dark"
+              disabled={createRole === "producao"}
             />
           </div>
 
@@ -331,6 +336,7 @@ export function SellersManager() {
               onChange={(e) => setCreateCommissionFixed(e.target.value)}
               placeholder="Ex: 50"
               className="input-dark"
+              disabled={createRole === "producao"}
             />
           </div>
 
@@ -408,11 +414,15 @@ export function SellersManager() {
                   <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
                       <dt className="text-xs text-muted-foreground">Comissão (%)</dt>
-                      <dd className="text-sm text-foreground">{selectedSeller.commissionPercent ?? "—"}</dd>
+                      <dd className="text-sm text-foreground">
+                        {selectedSeller.role === "producao" ? "—" : selectedSeller.commissionPercent ?? "—"}
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">Comissão (fixa)</dt>
-                      <dd className="text-sm text-foreground">{selectedSeller.commissionFixed ?? "—"}</dd>
+                      <dd className="text-sm text-foreground">
+                        {selectedSeller.role === "producao" ? "—" : selectedSeller.commissionFixed ?? "—"}
+                      </dd>
                     </div>
                   </dl>
 
@@ -469,6 +479,7 @@ export function SellersManager() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="vendedor">Vendedor</SelectItem>
+                          <SelectItem value="producao">Produção</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
                         </SelectContent>
                       </Select>
@@ -481,6 +492,7 @@ export function SellersManager() {
                         value={editCommissionPercent}
                         onChange={(e) => setEditCommissionPercent(e.target.value)}
                         className="input-dark"
+                        disabled={editRole === "producao"}
                       />
                     </div>
                     <div className="space-y-2">
@@ -491,6 +503,7 @@ export function SellersManager() {
                         value={editCommissionFixed}
                         onChange={(e) => setEditCommissionFixed(e.target.value)}
                         className="input-dark"
+                        disabled={editRole === "producao"}
                       />
                     </div>
                   </div>

@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import Vendedor from "./pages/Vendedor";
+import Producao from "./pages/Producao";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +21,7 @@ const App = () => (
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<RequireAuth><Index /></RequireAuth>} />
         <Route path="/vendedor" element={<RequireAuth><Vendedor /></RequireAuth>} />
+        <Route path="/producao" element={<RequireAuth><Producao /></RequireAuth>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
