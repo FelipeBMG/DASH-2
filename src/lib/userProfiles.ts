@@ -1,6 +1,6 @@
 import { getAuthState } from "@/lib/auth";
 
-export type AppRoleLabel = "admin" | "vendedor";
+export type AppRoleLabel = "admin" | "vendedor" | "producao";
 
 export type UserProfile = {
   userId: string;
@@ -46,5 +46,7 @@ export function upsertUserProfile(profile: Omit<UserProfile, "updatedAt">): User
 export function getCurrentUserRoleLabel(): AppRoleLabel {
   const user = getAuthState().user;
   if (!user) return "vendedor";
-  return user.role === "admin" ? "admin" : "vendedor";
+  if (user.role === "admin") return "admin";
+  if (user.role === "production") return "producao";
+  return "vendedor";
 }
