@@ -1,4 +1,4 @@
-import { FolderKanban, List, CalendarDays } from "lucide-react";
+import { FolderKanban, List, CalendarDays, Settings } from "lucide-react";
 import type { ProducaoSection } from "@/components/producao/types";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ const items: Array<{ id: ProducaoSection; label: string; icon: typeof FolderKanb
   { id: "kanban", label: "Kanban", icon: FolderKanban },
   { id: "lista", label: "Lista", icon: List },
   { id: "calendario", label: "Calendário", icon: CalendarDays },
+  { id: "settings", label: "Configurações", icon: Settings },
 ];
 
 export function ProducaoSidebar({ activeSection, onChangeSection }: Props) {
