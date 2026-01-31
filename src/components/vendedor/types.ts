@@ -1,4 +1,4 @@
-export type VendedorSection = "atendimento" | "calendar" | "settings";
+export type VendedorSection = "atendimento" | "fluxo" | "calendar" | "settings";
 
 export type VendedorRankingEntry = {
   id: string;
