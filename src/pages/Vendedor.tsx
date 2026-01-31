@@ -5,6 +5,7 @@ import { VendedorAtendimentoPanel } from "@/components/vendedor/VendedorAtendime
 import { VendedorCalendarPanel } from "@/components/vendedor/VendedorCalendarPanel";
 import { VendedorSettingsPanel } from "@/components/vendedor/VendedorSettingsPanel";
 import type { VendedorSection } from "@/components/vendedor/types";
+import { FluxoOperacoesModule } from "@/components/fluxo/FluxoOperacoesModule";
 
 export default function Vendedor() {
   const [activeSection, setActiveSection] = useState<VendedorSection>("atendimento");
@@ -15,6 +16,8 @@ export default function Vendedor() {
         return "Painel do Vendedor";
       case "calendar":
         return "Calendário de Compromissos";
+      case "fluxo":
+        return "Fluxo de Operações";
       case "settings":
         return "Configurações";
       default:
@@ -25,6 +28,7 @@ export default function Vendedor() {
   return (
     <VendedorLayout title={title} activeSection={activeSection} onChangeSection={setActiveSection}>
       {activeSection === "atendimento" ? <VendedorAtendimentoPanel /> : null}
+      {activeSection === "fluxo" ? <FluxoOperacoesModule /> : null}
       {activeSection === "calendar" ? <VendedorCalendarPanel /> : null}
       {activeSection === "settings" ? <VendedorSettingsPanel /> : null}
     </VendedorLayout>

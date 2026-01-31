@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { ClipboardList, Handshake, PhoneCall } from "lucide-react";
 
@@ -7,25 +7,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { vendedorMockAtendimentos, vendedorMockRanking } from "@/components/vendedor/mock";
 import { VendedorRankingCard } from "@/components/vendedor/VendedorRankingCard";
-import { VendedorStepper } from "@/components/vendedor/VendedorStepper";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
 export function VendedorAtendimentoPanel() {
-  const [stepIndex, setStepIndex] = useState(1);
-
-  const steps = useMemo(
-    () => [
-      { id: "s1", label: "Qualificar", description: "Entender dor, urgência e orçamento" },
-      { id: "s2", label: "Proposta", description: "Formalizar escopo e condições" },
-      { id: "s3", label: "Negociação", description: "Ajustes finais e objeções" },
-      { id: "s4", label: "Fechamento", description: "Pagamento + kickoff" },
-    ],
-    [],
-  );
-
   const atendimentos = vendedorMockAtendimentos;
 
   const summary = useMemo(() => {
@@ -110,10 +97,6 @@ export function VendedorAtendimentoPanel() {
                 </div>
               ))}
             </div>
-          </motion.section>
-
-          <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass-card p-6">
-            <VendedorStepper activeIndex={stepIndex} steps={steps} onChange={setStepIndex} />
           </motion.section>
         </div>
 

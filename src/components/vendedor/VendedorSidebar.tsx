@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronLeft, Calendar, Settings, Headset, Zap } from "lucide-react";
+import { ChevronLeft, Calendar, Settings, Headset, Zap, Workflow } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { VendedorSection } from "@/components/vendedor/types";
 
 const items: { id: VendedorSection; label: string; icon: typeof Headset }[] = [
   { id: "atendimento", label: "Atendimento", icon: Headset },
+  { id: "fluxo", label: "Fluxo de Operações", icon: Workflow },
   { id: "calendar", label: "Calendário", icon: Calendar },
   { id: "settings", label: "Configurações", icon: Settings },
 ];
