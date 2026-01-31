@@ -15,8 +15,8 @@ import type { FlowCard, FlowCardStatus } from '@/types/axion';
 import { getAuthState } from '@/lib/auth';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 
-type SellerEntry = { id: string; name: string };
-const DEFAULT_SELLERS: SellerEntry[] = [{ id: 'seller:vendedor', name: 'vendedor' }];
+type SellerEntry = { id: string; name: string; role?: 'vendedor' | 'admin' };
+const DEFAULT_SELLERS: SellerEntry[] = [{ id: 'seller:vendedor', name: 'vendedor', role: 'vendedor' }];
 
 interface FlowCardFormProps {
   card?: FlowCard;
@@ -83,7 +83,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
   }, [audioFile]);
 
   const teamOptions = useMemo(() => team, [team]);
-  const sellerOptions = useMemo(() => sellers, [sellers]);
+  const sellerOptions = useMemo(() => sellers.filter((s) => (s.role ?? 'vendedor') === 'vendedor'), [sellers]);
 
   const handleSellerChange = (sellerId: string) => {
     const seller = sellerOptions.find((s) => s.id === sellerId);

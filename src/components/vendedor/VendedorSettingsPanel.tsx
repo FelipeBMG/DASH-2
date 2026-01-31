@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, Phone, Save, LogOut, User } from "lucide-react";
 import { z } from "zod";
@@ -8,7 +8,8 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { setAuthenticated } from "@/lib/auth";
+import { getAuthState, setAuthenticated } from "@/lib/auth";
+import { getCurrentUserRoleLabel, readUserProfile, upsertUserProfile } from "@/lib/userProfiles";
 
 const vendedorSettingsSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome").max(80, "Nome muito longo"),
@@ -18,11 +19,14 @@ const vendedorSettingsSchema = z.object({
 
 export function VendedorSettingsPanel() {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    name: "vendedor",
-    email: "vendedor@axion.dev",
-    phone: "",
-  });
+  const authUser = getAuthState().user;
+  const existing = useMemo(() => (authUser?.id ? readUserProfile(authUser.id) : null), [authUser?.id]);
+
+  const [formData, setFormData] = useState(() => ({
+    name: existing?.name ?? authUser?.name ?? "",
+    email: existing?.email ?? "",
+    phone: existing?.phone ?? "",
+  }));
 
   const handleSave = () => {
     const parsed = vendedorSettingsSchema.safeParse(formData);
@@ -30,6 +34,19 @@ export function VendedorSettingsPanel() {
       toast.error(parsed.error.issues[0]?.message ?? "Dados inválidos");
       return;
     }
+
+    if (!authUser?.id) {
+      toast.error("Usuário não identificado. Faça login novamente.");
+      return;
+    }
+
+    upsertUserProfile({
+      userId: authUser.id,
+      role: getCurrentUserRoleLabel(),
+      name: parsed.data.name,
+      email: parsed.data.email,
+      phone: parsed.data.phone,
+    });
 
     toast.success("Configurações salvas com sucesso!");
   };
