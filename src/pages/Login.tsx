@@ -49,7 +49,9 @@ export default function Login() {
       return;
     }
 
-    const isValid = parsed.data.usuario === "Felipe" && parsed.data.senha === "36597199";
+    const isAdmin = parsed.data.usuario === "Felipe" && parsed.data.senha === "36597199";
+    const isSeller = parsed.data.usuario === "vendedor" && parsed.data.senha === "36597199";
+    const isValid = isAdmin || isSeller;
     if (!isValid) {
       setError("Usuário ou senha inválidos");
       return;
