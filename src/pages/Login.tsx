@@ -58,7 +58,8 @@ export default function Login() {
     }
 
     setAuthenticated(true);
-    navigate(redirectTo, { replace: true });
+    const destination = isSeller ? "/vendedor" : redirectTo;
+    navigate(destination, { replace: true });
   };
 
   return (
