@@ -22,6 +22,7 @@ import { FlowCardForm } from './FlowCardForm';
 import type { FlowCard, FlowCardStatus } from '@/types/axion';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getAuthState } from '@/lib/auth';
 
 const columns: { id: FlowCardStatus; title: string; color: string }[] = [
   { id: 'leads', title: 'Leads (Entrada)', color: 'bg-blue-500' },
@@ -42,6 +43,8 @@ const formatCurrency = (value: number) => {
 export function FluxoOperacoesModule() {
   const { flowCards, setFlowCards, openModal, closeModal } = useAxion();
   const [draggedCard, setDraggedCard] = useState<FlowCard | null>(null);
+  const authUser = getAuthState().user;
+  const isAdmin = authUser?.role === 'admin';
 
   const handleDragStart = (card: FlowCard) => {
     setDraggedCard(card);
@@ -66,7 +69,19 @@ export function FluxoOperacoesModule() {
     openModal(
       <FlowCardForm
         onSubmit={(card) => {
-          setFlowCards(prev => [...prev, { ...card, id: crypto.randomUUID(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }]);
+          const createdById = card.createdById || authUser?.id || '';
+          const createdByName = card.createdByName || authUser?.name || '';
+          setFlowCards(prev => [
+            ...prev,
+            {
+              ...card,
+              createdById,
+              createdByName,
+              id: crypto.randomUUID(),
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ]);
           closeModal();
         }}
         onCancel={closeModal}
@@ -79,7 +94,18 @@ export function FluxoOperacoesModule() {
       <FlowCardForm
         card={card}
         onSubmit={(updatedCard) => {
-          setFlowCards(prev => prev.map(c => c.id === card.id ? { ...updatedCard, id: card.id, createdAt: card.createdAt, updatedAt: new Date().toISOString() } : c));
+          setFlowCards(prev =>
+            prev.map(c =>
+              c.id === card.id
+                ? {
+                    ...updatedCard,
+                    id: card.id,
+                    createdAt: card.createdAt,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : c
+            )
+          );
           closeModal();
         }}
         onCancel={closeModal}
@@ -91,8 +117,15 @@ export function FluxoOperacoesModule() {
     setFlowCards(prev => prev.filter(c => c.id !== cardId));
   };
 
-  const getCardsByStatus = (status: FlowCardStatus) => 
-    flowCards.filter(card => card.status === status);
+  const canSeeCard = (card: FlowCard) => {
+    if (isAdmin) return true;
+    if (!authUser) return false;
+    // Vendedor vê cards atribuídos a ele OU que ele criou
+    return card.attendantId === authUser.id || card.createdById === authUser.id;
+  };
+
+  const getCardsByStatus = (status: FlowCardStatus) =>
+    flowCards.filter(card => card.status === status).filter(canSeeCard);
 
   return (
     <div className="space-y-6 h-full">

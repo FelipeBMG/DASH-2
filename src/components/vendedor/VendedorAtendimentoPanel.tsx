@@ -9,6 +9,7 @@ import { vendedorMockRanking } from "@/components/vendedor/mock";
 import { VendedorRankingCard } from "@/components/vendedor/VendedorRankingCard";
 import { useAxion } from "@/contexts/AxionContext";
 import type { FlowCardStatus } from "@/types/axion";
+import { getAuthState } from "@/lib/auth";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -45,6 +46,7 @@ function statusBadgeClass(status: FlowCardStatus) {
 
 export function VendedorAtendimentoPanel() {
   const { flowCards } = useAxion();
+  const authUser = getAuthState().user;
 
   // Requisito: "Só meus cards" (vendedor)
   const myActiveCards = useMemo(() => {
@@ -52,7 +54,7 @@ export function VendedorAtendimentoPanel() {
 
     return flowCards
       .filter((c) => c.status !== "concluido")
-      .filter((c) => c.attendantName?.trim().toLowerCase() === "vendedor")
+      .filter((c) => (authUser ? c.attendantId === authUser.id : c.attendantName?.trim().toLowerCase() === "vendedor"))
       .map((c) => {
         const dueISO = c.deadline || c.date || todayISO;
         return {
@@ -65,7 +67,7 @@ export function VendedorAtendimentoPanel() {
         };
       })
       .sort((a, b) => b.dueDate.localeCompare(a.dueDate));
-  }, [flowCards]);
+  }, [flowCards, authUser]);
 
   const summary = useMemo(() => {
     const todayISO = new Date().toISOString().split("T")[0];

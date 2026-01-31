@@ -139,6 +139,8 @@ export interface FlowCard {
   quantity: number;
   entryValue: number;
   status: FlowCardStatus;
+  createdById: string;
+  createdByName: string;
   attendantId: string;
   attendantName: string;
   productionResponsibleId: string;

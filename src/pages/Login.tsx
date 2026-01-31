@@ -6,7 +6,7 @@ import { Lock, User } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { setAuthenticated } from "@/lib/auth";
+import { setAuthenticated, setAuthUser } from "@/lib/auth";
 import { Label } from "@/components/ui/label";
 
 const loginSchema = z.object({
@@ -57,6 +57,12 @@ export default function Login() {
       return;
     }
 
+    // NOTE: Sem Cloud isso é apenas simulação (não é segurança real).
+    const user = isSeller
+      ? { id: "seller:vendedor", name: "vendedor", role: "seller" as const }
+      : { id: "admin:felipe", name: "Felipe", role: "admin" as const };
+
+    setAuthUser(user);
     setAuthenticated(true);
     const destination = isSeller ? "/vendedor" : redirectTo;
     navigate(destination, { replace: true });
