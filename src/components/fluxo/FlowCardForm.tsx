@@ -12,6 +12,11 @@ import {
 } from '@/components/ui/select';
 import { useAxion } from '@/contexts/AxionContext';
 import type { FlowCard, FlowCardStatus } from '@/types/axion';
+import { getAuthState } from '@/lib/auth';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+
+type SellerEntry = { id: string; name: string };
+const DEFAULT_SELLERS: SellerEntry[] = [{ id: 'seller:vendedor', name: 'vendedor' }];
 
 interface FlowCardFormProps {
   card?: FlowCard;
@@ -30,6 +35,9 @@ const statusOptions: { value: FlowCardStatus; label: string }[] = [
 
 export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
   const { team } = useAxion();
+  const authUser = getAuthState().user;
+  const [sellers] = useLocalStorage<SellerEntry[]>('axion_sellers', DEFAULT_SELLERS);
+
   const [formData, setFormData] = useState({
     date: card?.date || new Date().toISOString().split('T')[0],
     clientName: card?.clientName || '',
@@ -37,8 +45,10 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
     quantity: card?.quantity || 1,
     entryValue: card?.entryValue || 0,
     status: card?.status || 'leads' as FlowCardStatus,
-    attendantId: card?.attendantId || '',
-    attendantName: card?.attendantName || '',
+    createdById: card?.createdById || authUser?.id || '',
+    createdByName: card?.createdByName || authUser?.name || '',
+    attendantId: card?.attendantId || (authUser?.role === 'seller' ? authUser.id : ''),
+    attendantName: card?.attendantName || (authUser?.role === 'seller' ? authUser.name : ''),
     productionResponsibleId: card?.productionResponsibleId || '',
     productionResponsibleName: card?.productionResponsibleName || '',
     deadline: card?.deadline || '',
@@ -73,24 +83,28 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
   }, [audioFile]);
 
   const teamOptions = useMemo(() => team, [team]);
+  const sellerOptions = useMemo(() => sellers, [sellers]);
 
-  const handleTeamMemberChange = (field: 'attendant' | 'production', memberId: string) => {
-    const member = team.find(m => m.id === memberId);
-    if (member) {
-      if (field === 'attendant') {
-        setFormData(prev => ({
-          ...prev,
-          attendantId: member.id,
-          attendantName: member.name,
-        }));
-      } else {
-        setFormData(prev => ({
-          ...prev,
-          productionResponsibleId: member.id,
-          productionResponsibleName: member.name,
-        }));
-      }
-    }
+  const handleSellerChange = (sellerId: string) => {
+    const seller = sellerOptions.find((s) => s.id === sellerId);
+    if (!seller) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      attendantId: seller.id,
+      attendantName: seller.name,
+    }));
+  };
+
+  const handleProductionChange = (memberId: string) => {
+    const member = teamOptions.find((m) => m.id === memberId);
+    if (!member) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      productionResponsibleId: member.id,
+      productionResponsibleName: member.name,
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -192,15 +206,15 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
             <Label>Atendente (Colaborador)</Label>
             <Select
               value={formData.attendantId}
-              onValueChange={(value) => handleTeamMemberChange('attendant', value)}
+              onValueChange={handleSellerChange}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o atendente" />
               </SelectTrigger>
               <SelectContent>
-                {teamOptions.map(member => (
-                  <SelectItem key={member.id} value={member.id}>
-                    {member.name}
+                {sellerOptions.map((seller) => (
+                  <SelectItem key={seller.id} value={seller.id}>
+                    {seller.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -211,7 +225,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
             <Label>Produção (Responsável Técnico)</Label>
             <Select
               value={formData.productionResponsibleId}
-              onValueChange={(value) => handleTeamMemberChange('production', value)}
+              onValueChange={handleProductionChange}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o responsável" />

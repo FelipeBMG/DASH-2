@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { setAuthenticated } from '@/lib/auth';
 import { useNavigate } from 'react-router-dom';
 import type { Settings as SettingsType } from '@/types/axion';
+import { SellersManager } from '@/components/settings/SellersManager';
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, 'Informe o nome').max(80, 'Nome muito longo'),
@@ -164,6 +165,10 @@ export function SettingsModule() {
                 <SelectItem value="EUR">Euro (€)</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="pt-6 border-t border-border">
+            <SellersManager />
           </div>
 
           {/* Save Button */}
