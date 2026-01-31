@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { setAuthenticated, setAuthUser } from "@/lib/auth";
 import { Label } from "@/components/ui/label";
+import { verifyLogin } from "@/lib/userCredentials";
+import type { SellerEntry } from "@/types/sellers";
 
 const loginSchema = z.object({
   usuario: z
@@ -39,7 +41,7 @@ export default function Login() {
     return typeof state.from === "string" && state.from.startsWith("/") ? state.from : "/";
   }, [state.from]);
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -49,22 +51,41 @@ export default function Login() {
       return;
     }
 
-    const isAdmin = parsed.data.usuario === "Felipe" && parsed.data.senha === "36597199";
-    const isSeller = parsed.data.usuario === "vendedor" && parsed.data.senha === "36597199";
-    const isValid = isAdmin || isSeller;
-    if (!isValid) {
+    const { usuario: username, senha: password } = parsed.data;
+
+    // 1) Admin fixo (legado)
+    const isAdminLegacy = username === "Felipe" && password === "36597199";
+    if (isAdminLegacy) {
+      setAuthUser({ id: "admin:felipe", name: "Felipe", role: "admin" });
+      setAuthenticated(true);
+      navigate(redirectTo, { replace: true });
+      return;
+    }
+
+    // 2) Usuários criados no Admin (localStorage)
+    const verified = await verifyLogin(username, password);
+    if (!verified) {
       setError("Usuário ou senha inválidos");
       return;
     }
 
-    // NOTE: Sem Cloud isso é apenas simulação (não é segurança real).
-    const user = isSeller
-      ? { id: "seller:vendedor", name: "vendedor", role: "seller" as const }
-      : { id: "admin:felipe", name: "Felipe", role: "admin" as const };
+    const sellersRaw = window.localStorage.getItem("axion_sellers");
+    const sellers = (sellersRaw ? (JSON.parse(sellersRaw) as SellerEntry[]) : []) ?? [];
+    const entry = sellers.find((s) => s.id === verified.userId) ?? null;
+    if (!entry) {
+      setError("Usuário não encontrado. Peça ao admin para recriar/ajustar o colaborador.");
+      return;
+    }
+
+    const user = {
+      id: entry.id,
+      name: entry.name,
+      role: entry.role === "admin" ? ("admin" as const) : ("seller" as const),
+    };
 
     setAuthUser(user);
     setAuthenticated(true);
-    const destination = isSeller ? "/vendedor" : redirectTo;
+    const destination = user.role === "seller" ? "/vendedor" : redirectTo;
     navigate(destination, { replace: true });
   };
 
