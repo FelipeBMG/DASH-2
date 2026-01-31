@@ -1,0 +1,33 @@
+import { motion } from "framer-motion";
+import { Bell, Search } from "lucide-react";
+
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+export function VendedorHeader({ title }: { title: string }) {
+  return (
+    <motion.header
+      initial={{ y: -10, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      className="h-16 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-40"
+    >
+      <div className="h-full px-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="relative hidden md:block">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Buscar..." className="w-64 pl-9 bg-secondary border-border" />
+          </div>
+
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="w-5 h-5 text-muted-foreground" />
+            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary animate-pulse" />
+          </Button>
+        </div>
+      </div>
+    </motion.header>
+  );
+}
