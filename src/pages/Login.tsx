@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { z } from "zod";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Zap, Lock, User } from "lucide-react";
+import { Lock, User } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -70,53 +70,9 @@ export default function Login() {
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background to-background/80" />
       </div>
 
-      <section className="relative mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-10 sm:px-6">
-        <div className="grid w-full grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Brand side */}
-          <div className="hidden lg:flex">
-            <div className="glass-card w-full p-10 overflow-hidden relative">
-              <div className="pointer-events-none absolute inset-0 opacity-40" style={{ background: "var(--gradient-dark)" }} />
-
-              <div className="relative flex h-full flex-col justify-between">
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                      <Zap className="h-6 w-6 text-primary-foreground" />
-                    </div>
-                    <div className="leading-tight">
-                      <p className="text-2xl font-bold gradient-text">AXION</p>
-                      <p className="text-xs text-muted-foreground -mt-1">ERP System</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-3xl font-semibold tracking-tight text-foreground">
-                      Acesse seu painel
-                    </p>
-                    <p className="text-sm text-muted-foreground max-w-md">
-                      Entre para gerenciar operações, projetos, financeiro e relatórios com a mesma
-                      experiência premium do sistema.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
-                  <div className="rounded-xl border border-border bg-secondary/40 p-3">
-                    <p className="font-medium text-foreground">Rápido</p>
-                    <p>Atalhos e fluxos objetivos</p>
-                  </div>
-                  <div className="rounded-xl border border-border bg-secondary/40 p-3">
-                    <p className="font-medium text-foreground">Seguro</p>
-                    <p>Rotas protegidas no app</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Form side */}
-          <div className="flex items-center">
-            <Card className="glass-card w-full overflow-hidden">
+      <section className="relative mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-10 sm:px-6">
+        <div className="w-full">
+          <Card className="glass-card w-full overflow-hidden">
               <CardHeader className="space-y-2">
                 <CardTitle className="text-2xl">Entrar</CardTitle>
                 <CardDescription>
@@ -162,14 +118,9 @@ export default function Login() {
                   <Button type="submit" className="w-full">
                     Entrar
                   </Button>
-
-                  <p className="text-xs text-muted-foreground">
-                    Dica: em telas menores, os campos têm padding extra para não encostar nas bordas.
-                  </p>
                 </form>
               </CardContent>
             </Card>
-          </div>
         </div>
       </section>
     </main>
