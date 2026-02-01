@@ -138,6 +138,7 @@ export interface FlowCard {
   leadsCount: number;
   quantity: number;
   entryValue: number;
+  category?: string;
   status: FlowCardStatus;
   createdById: string;
   createdByName: string;

@@ -15,8 +15,8 @@ import type { FlowCard, FlowCardStatus } from '@/types/axion';
 import { getAuthState } from '@/lib/auth';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 
-type SellerEntry = { id: string; name: string; role?: 'vendedor' | 'admin' };
-const DEFAULT_SELLERS: SellerEntry[] = [{ id: 'seller:vendedor', name: 'vendedor', role: 'vendedor' }];
+type CollaboratorEntry = { id: string; name: string; role: 'vendedor' | 'producao' | 'admin' };
+const DEFAULT_SELLERS: CollaboratorEntry[] = [{ id: 'seller:vendedor', name: 'vendedor', role: 'vendedor' }];
 
 interface FlowCardFormProps {
   card?: FlowCard;
@@ -36,7 +36,7 @@ const statusOptions: { value: FlowCardStatus; label: string }[] = [
 export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
   const { team } = useAxion();
   const authUser = getAuthState().user;
-  const [sellers] = useLocalStorage<SellerEntry[]>('axion_sellers', DEFAULT_SELLERS);
+  const [sellers] = useLocalStorage<CollaboratorEntry[]>('axion_sellers', DEFAULT_SELLERS);
 
   // Mantém os campos no modelo do card (para compatibilidade), mas não renderiza no form.
   // (pedido: remover “Leads” e “Quantidade”)
@@ -47,6 +47,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
     leadsCount: card?.leadsCount || 1,
     quantity: card?.quantity || 1,
     entryValue: card?.entryValue || 0,
+    category: card?.category || 'conteudo',
     status: card?.status || 'leads' as FlowCardStatus,
     createdById: card?.createdById || authUser?.id || '',
     createdByName: card?.createdByName || authUser?.name || '',
@@ -86,11 +87,8 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
     return () => URL.revokeObjectURL(url);
   }, [audioFile]);
 
-  const sellerOptions = useMemo(() => sellers.filter((s) => (s.role ?? 'vendedor') === 'vendedor'), [sellers]);
-  const productionOptions = useMemo(
-    () => team.filter((m) => String(m.role).toLowerCase() === 'producao'),
-    [team],
-  );
+  const sellerOptions = useMemo(() => sellers.filter((s) => s.role === 'vendedor'), [sellers]);
+  const productionOptions = useMemo(() => sellers.filter((s) => s.role === 'producao'), [sellers]);
 
   const handleSellerChange = useCallback(
     (sellerId: string) => {
@@ -119,6 +117,14 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
     },
     [productionOptions],
   );
+
+  const setQuickEntryValue = useCallback((value: number) => {
+    setFormData((prev) => ({ ...prev, entryValue: value }));
+  }, []);
+
+  // manter compatibilidade: se algum lugar ainda usa `team` para outras coisas
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _teamUnused = team;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,15 +188,46 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2 min-w-0 md:col-span-1">
+          <div className="space-y-2 min-w-0">
             <Label>Valor de Entrada (R$)</Label>
             <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={formData.entryValue}
-              onChange={(e) => setFormData(prev => ({ ...prev, entryValue: Number(e.target.value) }))}
+              inputMode="decimal"
+              placeholder="Ex: 80,00"
+              value={String(formData.entryValue).replace('.', ',')}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const normalized = raw.replace(',', '.').replace(/[^0-9.]/g, '');
+                const n = Number(normalized);
+                setFormData((prev) => ({ ...prev, entryValue: Number.isFinite(n) ? n : 0 }));
+              }}
             />
+
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setQuickEntryValue(40)}>
+                40
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setQuickEntryValue(79.9)}>
+                79,9
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setQuickEntryValue(80)}>
+                80
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2 min-w-0">
+            <Label>Categoria</Label>
+            <Select value={formData.category} onValueChange={(v) => setFormData((p) => ({ ...p, category: v }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="conteudo">Conteúdo</SelectItem>
+                <SelectItem value="trafego">Tráfego</SelectItem>
+                <SelectItem value="site">Site</SelectItem>
+                <SelectItem value="outros">Outros</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -231,6 +268,11 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
                 ))}
               </SelectContent>
             </Select>
+            {productionOptions.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhum colaborador de Produção encontrado (cadastre com função “Produção” em Configurações &gt; Colaboradores).
+              </p>
+            ) : null}
           </div>
         </div>
 
