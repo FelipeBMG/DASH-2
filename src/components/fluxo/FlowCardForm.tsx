@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +38,9 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
   const authUser = getAuthState().user;
   const [sellers] = useLocalStorage<SellerEntry[]>('axion_sellers', DEFAULT_SELLERS);
 
+  // Mantém os campos no modelo do card (para compatibilidade), mas não renderiza no form.
+  // (pedido: remover “Leads” e “Quantidade”)
+
   const [formData, setFormData] = useState({
     date: card?.date || new Date().toISOString().split('T')[0],
     clientName: card?.clientName || '',
@@ -55,6 +58,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
     notes: card?.notes || '',
   });
 
+  const [showUploads, setShowUploads] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -82,10 +86,14 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
     return () => URL.revokeObjectURL(url);
   }, [audioFile]);
 
-  const teamOptions = useMemo(() => team, [team]);
   const sellerOptions = useMemo(() => sellers.filter((s) => (s.role ?? 'vendedor') === 'vendedor'), [sellers]);
+  const productionOptions = useMemo(
+    () => team.filter((m) => String(m.role).toLowerCase() === 'producao'),
+    [team],
+  );
 
-  const handleSellerChange = (sellerId: string) => {
+  const handleSellerChange = useCallback(
+    (sellerId: string) => {
     const seller = sellerOptions.find((s) => s.id === sellerId);
     if (!seller) return;
 
@@ -94,10 +102,13 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
       attendantId: seller.id,
       attendantName: seller.name,
     }));
-  };
+    },
+    [sellerOptions],
+  );
 
-  const handleProductionChange = (memberId: string) => {
-    const member = teamOptions.find((m) => m.id === memberId);
+  const handleProductionChange = useCallback(
+    (memberId: string) => {
+    const member = productionOptions.find((m) => m.id === memberId);
     if (!member) return;
 
     setFormData((prev) => ({
@@ -105,7 +116,9 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
       productionResponsibleId: member.id,
       productionResponsibleName: member.name,
     }));
-  };
+    },
+    [productionOptions],
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,27 +182,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2 min-w-0">
-            <Label>Leads</Label>
-            <Input
-              type="number"
-              min="0"
-              value={formData.leadsCount}
-              onChange={(e) => setFormData(prev => ({ ...prev, leadsCount: Number(e.target.value) }))}
-            />
-          </div>
-
-          <div className="space-y-2 min-w-0">
-            <Label>Quantidade</Label>
-            <Input
-              type="number"
-              min="1"
-              value={formData.quantity}
-              onChange={(e) => setFormData(prev => ({ ...prev, quantity: Number(e.target.value) }))}
-            />
-          </div>
-
-          <div className="space-y-2 min-w-0">
+          <div className="space-y-2 min-w-0 md:col-span-1">
             <Label>Valor de Entrada (R$)</Label>
             <Input
               type="number"
@@ -231,7 +224,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
                 <SelectValue placeholder="Selecione o responsável" />
               </SelectTrigger>
               <SelectContent>
-                {teamOptions.map(member => (
+                {productionOptions.map(member => (
                   <SelectItem key={member.id} value={member.id}>
                     {member.name}
                   </SelectItem>
@@ -252,52 +245,65 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
           </div>
 
           <div className="space-y-2 min-w-0">
-            <Label>Uploads (Imagem / Áudio)</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
-              <div className="space-y-2 min-w-0">
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                  className="min-w-0"
-                />
-                {imagePreviewUrl ? (
-                  <div className="rounded-lg border border-border/60 bg-secondary/20 p-2">
-                    <img
-                      src={imagePreviewUrl}
-                      alt="Prévia da imagem selecionada"
-                      className="h-24 w-full object-cover rounded-md"
-                      loading="lazy"
-                    />
-                    <p className="mt-2 text-xs text-muted-foreground truncate">
-                      {imageFile?.name}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Sem imagem selecionada</p>
-                )}
-              </div>
-
-              <div className="space-y-2 min-w-0">
-                <Input
-                  type="file"
-                  accept="audio/*"
-                  onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
-                  className="min-w-0"
-                />
-                {audioFile ? (
-                  <div className="rounded-lg border border-border/60 bg-secondary/20 p-2">
-                    <audio controls className="w-full">
-                      {audioPreviewUrl ? <source src={audioPreviewUrl} /> : null}
-                    </audio>
-                    <p className="mt-2 text-xs text-muted-foreground truncate">{audioFile.name}</p>
-                    <p className="text-[11px] text-muted-foreground">(Arquivo não é salvo ainda)</p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Sem áudio selecionado</p>
-                )}
-              </div>
+            <div className="flex items-center justify-between gap-3">
+              <Label>Uploads (Imagem / Áudio)</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowUploads((v) => !v)}
+              >
+                {showUploads ? 'Ocultar' : 'Adicionar'}
+              </Button>
             </div>
+
+            {showUploads ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+                <div className="space-y-2 min-w-0">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                    className="min-w-0"
+                  />
+                  {imagePreviewUrl ? (
+                    <div className="rounded-lg border border-border/60 bg-secondary/20 p-2">
+                      <img
+                        src={imagePreviewUrl}
+                        alt="Prévia da imagem selecionada"
+                        className="h-24 w-full object-cover rounded-md"
+                        loading="lazy"
+                      />
+                      <p className="mt-2 text-xs text-muted-foreground truncate">{imageFile?.name}</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Sem imagem selecionada</p>
+                  )}
+                </div>
+
+                <div className="space-y-2 min-w-0">
+                  <Input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+                    className="min-w-0"
+                  />
+                  {audioFile ? (
+                    <div className="rounded-lg border border-border/60 bg-secondary/20 p-2">
+                      <audio controls className="w-full">
+                        {audioPreviewUrl ? <source src={audioPreviewUrl} /> : null}
+                      </audio>
+                      <p className="mt-2 text-xs text-muted-foreground truncate">{audioFile.name}</p>
+                      <p className="text-[11px] text-muted-foreground">(Arquivo não é salvo ainda)</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Sem áudio selecionado</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Clique em “Adicionar” para anexar arquivos.</p>
+            )}
           </div>
         </div>
 
