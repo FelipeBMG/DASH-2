@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabaseClient";
+import { upsertMyUserProfile } from "@/lib/userProfilesApi";
 
 const signupSchema = z
   .object({
@@ -80,6 +81,10 @@ export default function Signup() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: parsed.data.email,
         password: parsed.data.password,
+        options: {
+          // Ensures email confirmation links (when enabled) return to this app.
+          emailRedirectTo: window.location.origin,
+        },
       });
       if (signUpError) {
         setError(signUpError.message);
@@ -89,7 +94,18 @@ export default function Signup() {
       // If session is immediately available (email confirmations off), create profile now.
       const userId = data.user?.id;
       if (userId) {
-        await supabase.from("user_profiles").upsert({ user_id: userId, name: parsed.data.name });
+        try {
+          await upsertMyUserProfile({
+            userId,
+            name: parsed.data.name,
+            email: parsed.data.email,
+            phone: "",
+          });
+        } catch (profileErr) {
+          const message = profileErr instanceof Error ? profileErr.message : "Erro ao salvar perfil";
+          setError(message);
+          return;
+        }
       }
 
       // Login flow continues via /login (role assignment is handled after you promote to admin).
