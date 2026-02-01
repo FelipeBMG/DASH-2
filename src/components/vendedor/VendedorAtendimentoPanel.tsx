@@ -9,7 +9,7 @@ import { vendedorMockRanking } from "@/components/vendedor/mock";
 import { VendedorRankingCard } from "@/components/vendedor/VendedorRankingCard";
 import { useAxion } from "@/contexts/AxionContext";
 import type { FlowCardStatus } from "@/types/axion";
-import { getAuthState } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -46,7 +46,7 @@ function statusBadgeClass(status: FlowCardStatus) {
 
 export function VendedorAtendimentoPanel() {
   const { flowCards } = useAxion();
-  const authUser = getAuthState().user;
+  const { user: authUser } = useAuth();
 
   // Requisito: "Só meus cards" (vendedor)
   const myActiveCards = useMemo(() => {

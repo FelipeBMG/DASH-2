@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Lock, User } from "lucide-react";
@@ -6,17 +6,11 @@ import { Lock, User } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { setAuthenticated, setAuthUser } from "@/lib/auth";
 import { Label } from "@/components/ui/label";
-import { verifyLogin } from "@/lib/userCredentials";
-import type { SellerEntry } from "@/types/sellers";
+import { useAuth } from "@/contexts/AuthContext";
 
 const loginSchema = z.object({
-  usuario: z
-    .string()
-    .trim()
-    .min(1, "Informe o usuário")
-    .max(64, "Usuário muito longo"),
+  usuario: z.string().trim().min(1, "Informe o email").max(255, "Email muito longo"),
   senha: z
     .string()
     .trim()
@@ -32,6 +26,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = (location.state ?? {}) as LocationState;
+  const { signInWithPassword, user } = useAuth();
 
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
@@ -40,6 +35,19 @@ export default function Login() {
   const redirectTo = useMemo(() => {
     return typeof state.from === "string" && state.from.startsWith("/") ? state.from : "/";
   }, [state.from]);
+
+  useEffect(() => {
+    if (!user) return;
+    const destination =
+      typeof state.from === "string" && state.from.startsWith("/")
+        ? state.from
+        : user.role === "seller"
+          ? "/vendedor"
+          : user.role === "production"
+            ? "/producao"
+            : "/";
+    navigate(destination, { replace: true });
+  }, [navigate, state.from, user]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,47 +59,16 @@ export default function Login() {
       return;
     }
 
-    const { usuario: username, senha: password } = parsed.data;
+    const { usuario: email, senha: password } = parsed.data;
 
-    // 1) Admin fixo (legado)
-    const isAdminLegacy = username === "Felipe" && password === "36597199";
-    if (isAdminLegacy) {
-      setAuthUser({ id: "admin:felipe", name: "Felipe", role: "admin" });
-      setAuthenticated(true);
-      navigate(redirectTo, { replace: true });
+    const result = await signInWithPassword({ email, password });
+    if (result.error) {
+      setError("Email ou senha inválidos");
       return;
     }
 
-    // 2) Usuários criados no Admin (localStorage)
-    const verified = await verifyLogin(username, password);
-    if (!verified) {
-      setError("Usuário ou senha inválidos");
-      return;
-    }
-
-    const sellersRaw = window.localStorage.getItem("axion_sellers");
-    const sellers = (sellersRaw ? (JSON.parse(sellersRaw) as SellerEntry[]) : []) ?? [];
-    const entry = sellers.find((s) => s.id === verified.userId) ?? null;
-    if (!entry) {
-      setError("Usuário não encontrado. Peça ao admin para recriar/ajustar o colaborador.");
-      return;
-    }
-
-    const user = {
-      id: entry.id,
-      name: entry.name,
-      role:
-        entry.role === "admin"
-          ? ("admin" as const)
-          : entry.role === "producao"
-            ? ("production" as const)
-            : ("seller" as const),
-    };
-
-    setAuthUser(user);
-    setAuthenticated(true);
-    const destination = user.role === "seller" ? "/vendedor" : user.role === "production" ? "/producao" : redirectTo;
-    navigate(destination, { replace: true });
+    // O redirecionamento final acontece via useEffect (quando o role carregar).
+    navigate(redirectTo, { replace: true });
   };
 
   return (
@@ -118,15 +95,16 @@ export default function Login() {
               <CardContent>
                 <form onSubmit={onSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="usuario">Usuário</Label>
+                    <Label htmlFor="usuario">Email</Label>
                     <div className="relative">
                       <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         id="usuario"
-                        autoComplete="username"
+                        type="email"
+                        autoComplete="email"
                         value={usuario}
                         onChange={(e) => setUsuario(e.target.value)}
-                        placeholder="Felipe"
+                        placeholder="seuemail@dominio.com"
                         className="pl-9 bg-secondary border-border"
                       />
                     </div>
