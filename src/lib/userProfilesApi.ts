@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 
 export type DbUserProfile = {
   user_id: string;
@@ -9,6 +9,8 @@ export type DbUserProfile = {
 };
 
 export async function readMyUserProfile(userId: string) {
+  if (!isSupabaseConfigured) throw new Error("Backend não configurado");
+  const supabase = getSupabase();
   const { data, error } = await supabase
     .from("user_profiles")
     .select("user_id,name,email,phone,updated_at")
@@ -25,6 +27,8 @@ export async function upsertMyUserProfile(params: {
   email: string;
   phone: string;
 }) {
+  if (!isSupabaseConfigured) throw new Error("Backend não configurado");
+  const supabase = getSupabase();
   const { data, error } = await supabase
     .from("user_profiles")
     .upsert(
