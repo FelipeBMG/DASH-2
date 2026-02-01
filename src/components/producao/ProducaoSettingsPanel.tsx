@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Mail, Phone, Save, LogOut, User } from "lucide-react";
 import { z } from "zod";
@@ -8,8 +8,8 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getAuthState, setAuthenticated } from "@/lib/auth";
-import { getCurrentUserRoleLabel, readUserProfile, upsertUserProfile } from "@/lib/userProfiles";
+import { useAuth } from "@/contexts/AuthContext";
+import { readMyUserProfile, upsertMyUserProfile } from "@/lib/userProfilesApi";
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome").max(80, "Nome muito longo"),
@@ -19,14 +19,33 @@ const settingsSchema = z.object({
 
 export function ProducaoSettingsPanel() {
   const navigate = useNavigate();
-  const authUser = getAuthState().user;
-  const existing = useMemo(() => (authUser?.id ? readUserProfile(authUser.id) : null), [authUser?.id]);
+  const { user, signOut } = useAuth();
 
   const [formData, setFormData] = useState(() => ({
-    name: existing?.name ?? authUser?.name ?? "",
-    email: existing?.email ?? "",
-    phone: existing?.phone ?? "",
+    name: "",
+    email: "",
+    phone: "",
   }));
+
+  useEffect(() => {
+    let alive = true;
+    if (!user?.id) return;
+    readMyUserProfile(user.id)
+      .then((existing) => {
+        if (!alive) return;
+        setFormData({
+          name: existing?.name ?? "",
+          email: existing?.email ?? user.email ?? "",
+          phone: existing?.phone ?? "",
+        });
+      })
+      .catch(() => {
+        // ignore
+      });
+    return () => {
+      alive = false;
+    };
+  }, [user?.id, user?.email]);
 
   const handleSave = () => {
     const parsed = settingsSchema.safeParse(formData);
@@ -35,24 +54,23 @@ export function ProducaoSettingsPanel() {
       return;
     }
 
-    if (!authUser?.id) {
+    if (!user?.id) {
       toast.error("Usuário não identificado. Faça login novamente.");
       return;
     }
 
-    upsertUserProfile({
-      userId: authUser.id,
-      role: getCurrentUserRoleLabel(),
+    upsertMyUserProfile({
+      userId: user.id,
       name: parsed.data.name,
       email: parsed.data.email,
       phone: parsed.data.phone,
-    });
-
-    toast.success("Configurações salvas com sucesso!");
+    })
+      .then(() => toast.success("Configurações salvas com sucesso!"))
+      .catch(() => toast.error("Não foi possível salvar. Verifique sua conexão/permissões."));
   };
 
   const handleLogout = () => {
-    setAuthenticated(false);
+    void signOut();
     navigate("/login", { replace: true });
   };
 

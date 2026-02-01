@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { setAuthenticated } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Settings as SettingsType } from "@/types/axion";
 
 const settingsSchema = z.object({
@@ -29,6 +29,7 @@ type Props = {
 
 export function AdminSettingsForm({ settings, setSettings }: Props) {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
 
   const [formData, setFormData] = useState(() => ({
     name: settings.name,
@@ -51,7 +52,7 @@ export function AdminSettingsForm({ settings, setSettings }: Props) {
   };
 
   const handleLogout = () => {
-    setAuthenticated(false);
+    void signOut();
     navigate("/login", { replace: true });
   };
 

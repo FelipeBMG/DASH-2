@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select';
 import { useAxion } from '@/contexts/AxionContext';
 import type { FlowCard, FlowCardStatus } from '@/types/axion';
-import { getAuthState } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 
 type CollaboratorEntry = { id: string; name: string; role: 'vendedor' | 'producao' | 'admin' };
@@ -35,7 +35,7 @@ const statusOptions: { value: FlowCardStatus; label: string }[] = [
 
 export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
   const { team } = useAxion();
-  const authUser = getAuthState().user;
+  const { user: authUser } = useAuth();
   const [sellers] = useLocalStorage<CollaboratorEntry[]>('axion_sellers', DEFAULT_SELLERS);
 
   // Mantém os campos no modelo do card (para compatibilidade), mas não renderiza no form.
@@ -50,9 +50,9 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
     category: card?.category || 'conteudo',
     status: card?.status || 'leads' as FlowCardStatus,
     createdById: card?.createdById || authUser?.id || '',
-    createdByName: card?.createdByName || authUser?.name || '',
+    createdByName: card?.createdByName || authUser?.name || authUser?.email || '',
     attendantId: card?.attendantId || (authUser?.role === 'seller' ? authUser.id : ''),
-    attendantName: card?.attendantName || (authUser?.role === 'seller' ? authUser.name : ''),
+    attendantName: card?.attendantName || (authUser?.role === 'seller' ? (authUser.name || authUser.email) : ''),
     productionResponsibleId: card?.productionResponsibleId || '',
     productionResponsibleName: card?.productionResponsibleName || '',
     deadline: card?.deadline || '',

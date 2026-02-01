@@ -22,7 +22,7 @@ import { FlowCardForm } from './FlowCardForm';
 import type { FlowCard, FlowCardStatus } from '@/types/axion';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getAuthState } from '@/lib/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 const columns: { id: FlowCardStatus; title: string; color: string }[] = [
   { id: 'leads', title: 'Leads (Entrada)', color: 'bg-blue-500' },
@@ -43,7 +43,7 @@ const formatCurrency = (value: number) => {
 export function FluxoOperacoesModule() {
   const { flowCards, setFlowCards, openModal, closeModal } = useAxion();
   const [draggedCard, setDraggedCard] = useState<FlowCard | null>(null);
-  const authUser = getAuthState().user;
+  const { user: authUser } = useAuth();
   const isAdmin = authUser?.role === 'admin';
 
   const handleDragStart = (card: FlowCard) => {
@@ -70,7 +70,7 @@ export function FluxoOperacoesModule() {
       <FlowCardForm
         onSubmit={(card) => {
           const createdById = card.createdById || authUser?.id || '';
-          const createdByName = card.createdByName || authUser?.name || '';
+          const createdByName = card.createdByName || authUser?.name || authUser?.email || '';
           setFlowCards(prev => [
             ...prev,
             {
