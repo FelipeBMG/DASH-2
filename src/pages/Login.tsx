@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Lock, User } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabaseClient";
+
+async function isSignupOpen(): Promise<boolean> {
+  if (!isSupabaseConfigured) return false;
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc("is_signup_open");
+  if (error) return true;
+  return Boolean(data);
+}
 
 const loginSchema = z.object({
   usuario: z.string().trim().min(1, "Informe o email").max(255, "Email muito longo"),
@@ -31,6 +41,7 @@ export default function Login() {
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [signupOpen, setSignupOpen] = useState(false);
 
   const redirectTo = useMemo(() => {
     return typeof state.from === "string" && state.from.startsWith("/") ? state.from : "/";
@@ -48,6 +59,17 @@ export default function Login() {
             : "/";
     navigate(destination, { replace: true });
   }, [navigate, state.from, user]);
+
+  useEffect(() => {
+    let alive = true;
+    void isSignupOpen().then((open) => {
+      if (!alive) return;
+      setSignupOpen(open);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,6 +153,15 @@ export default function Login() {
                   <Button type="submit" className="w-full">
                     Entrar
                   </Button>
+
+                  {signupOpen ? (
+                    <p className="text-sm text-muted-foreground">
+                      Primeiro acesso?{" "}
+                      <Link to="/signup" className="underline underline-offset-4">
+                        Criar conta
+                      </Link>
+                    </p>
+                  ) : null}
                 </form>
               </CardContent>
             </Card>
