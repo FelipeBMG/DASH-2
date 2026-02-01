@@ -50,7 +50,6 @@ export default function Signup() {
       .then((value) => {
         if (!alive) return;
         setOpen(value);
-        if (!value) navigate("/login", { replace: true });
       })
       .finally(() => {
         if (!alive) return;
@@ -101,7 +100,6 @@ export default function Signup() {
   };
 
   if (checking) return null;
-  if (!open) return null;
 
   return (
     <main className="min-h-screen bg-background">
@@ -118,10 +116,25 @@ export default function Signup() {
           <Card className="glass-card w-full overflow-hidden">
             <CardHeader className="space-y-2">
               <CardTitle className="text-2xl">Criar conta</CardTitle>
-              <CardDescription>Crie seu acesso inicial. Depois você pode desativar o cadastro aberto.</CardDescription>
+              <CardDescription>
+                {open
+                  ? "Crie seu acesso inicial. Depois você pode desativar o cadastro aberto."
+                  : "Cadastro desativado. Entre com sua conta ou peça para um admin criar/invitar seu acesso."}
+              </CardDescription>
             </CardHeader>
 
             <CardContent>
+              {!open ? (
+                <div className="space-y-4">
+                  <Button className="w-full" variant="secondary" onClick={() => navigate("/login", { replace: true })}>
+                    Ir para login
+                  </Button>
+
+                  <p className="text-sm text-muted-foreground">
+                    Se você ainda não tem nenhum admin, abra o cadastro apenas temporariamente e tente novamente.
+                  </p>
+                </div>
+              ) : (
               <form onSubmit={onSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome</Label>
@@ -179,6 +192,7 @@ export default function Signup() {
                   </Link>
                 </p>
               </form>
+              )}
             </CardContent>
           </Card>
         </div>
