@@ -1,4 +1,4 @@
-import { FolderKanban, List, CalendarDays, Settings } from "lucide-react";
+import { FolderKanban, List, CalendarDays, Settings, Workflow } from "lucide-react";
 import type { ProducaoSection } from "@/components/producao/types";
 import { cn } from "@/lib/utils";
 
@@ -8,6 +8,7 @@ type Props = {
 };
 
 const items: Array<{ id: ProducaoSection; label: string; icon: typeof FolderKanban }> = [
+  { id: "fluxo", label: "Fluxo", icon: Workflow },
   { id: "kanban", label: "Kanban", icon: FolderKanban },
   { id: "lista", label: "Lista", icon: List },
   { id: "calendario", label: "Calendário", icon: CalendarDays },

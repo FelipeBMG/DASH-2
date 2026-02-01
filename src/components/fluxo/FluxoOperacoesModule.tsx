@@ -120,7 +120,13 @@ export function FluxoOperacoesModule() {
   const canSeeCard = (card: FlowCard) => {
     if (isAdmin) return true;
     if (!authUser) return false;
-    // Vendedor vê cards atribuídos a ele OU que ele criou
+    // Regras de visibilidade:
+    // - Admin: tudo
+    // - Vendedor: cards atribuídos (atendente) OU criados por ele
+    // - Produção: cards atribuídos (responsável técnico) OU criados por ele
+    if (authUser.role === 'production') {
+      return card.productionResponsibleId === authUser.id || card.createdById === authUser.id;
+    }
     return card.attendantId === authUser.id || card.createdById === authUser.id;
   };
 
