@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Users } from "lucide-react";
 
-import { SellersManager } from "@/components/settings/SellersManager";
+import { AdminUsersTab } from "@/components/settings/AdminUsersTab";
 
 export function AdminCollaboratorsTab() {
   return (
@@ -11,7 +11,7 @@ export function AdminCollaboratorsTab() {
           <Users className="h-5 w-5 text-muted-foreground" />
           <h2 className="text-2xl font-bold text-foreground">Colaboradores</h2>
         </div>
-        <SellersManager />
+        <AdminUsersTab />
       </motion.div>
     </div>
   );

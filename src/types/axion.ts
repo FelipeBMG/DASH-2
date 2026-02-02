@@ -101,6 +101,16 @@ export interface Settings {
   currency: string;
 }
 
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  description?: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface DashboardMetrics {
   monthlyRevenue: number;
   activeProjects: number;
@@ -135,9 +145,13 @@ export interface FlowCard {
   id: string;
   date: string;
   clientName: string;
+  whatsapp?: string;
   leadsCount: number;
   quantity: number;
   entryValue: number;
+  receivedValue: number;
+  productId?: string;
+  productName?: string;
   category?: string;
   status: FlowCardStatus;
   createdById: string;
@@ -150,6 +164,21 @@ export interface FlowCard {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type FlowCardAttachmentKind = 'image' | 'audio' | 'file';
+
+export interface FlowCardAttachment {
+  id: string;
+  flowCardId: string;
+  uploadedById?: string;
+  fileName: string;
+  mimeType: string;
+  bucketId: string;
+  objectPath: string;
+  publicUrl: string;
+  createdAt: string;
+  kind: FlowCardAttachmentKind;
 }
 
 export type ModuleName = 

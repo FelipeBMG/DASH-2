@@ -26,7 +26,7 @@ export function ModalProvider() {
             transition={{ type: 'tween', duration: 0.18, ease: 'easeOut' }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
           >
-            <div className="relative w-full max-w-2xl max-h-[90vh] overflow-auto rounded-2xl bg-card border border-border shadow-2xl pointer-events-auto">
+            <div className="relative w-full max-w-5xl xl:max-w-6xl max-h-[90vh] overflow-auto no-scrollbar rounded-2xl bg-card border border-border shadow-2xl pointer-events-auto">
               <button
                 onClick={closeModal}
                 className="absolute top-4 right-4 p-2 rounded-lg hover:bg-muted transition-colors z-10"

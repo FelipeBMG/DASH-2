@@ -9,15 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
-import { getSupabase, isSupabaseConfigured } from "@/lib/supabaseClient";
-
-async function isSignupOpen(): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
-  const supabase = getSupabase();
-  const { data, error } = await supabase.rpc("is_signup_open");
-  if (error) return true;
-  return Boolean(data);
-}
+// Signup não é público: a criação de usuários é feita via admin.
 
 const loginSchema = z.object({
   usuario: z.string().trim().min(1, "Informe o email").max(255, "Email muito longo"),
@@ -32,6 +24,21 @@ type LocationState = {
   from?: string;
 };
 
+function homeForRole(role: "admin" | "seller" | "production") {
+  if (role === "seller") return "/vendedor";
+  if (role === "production") return "/producao";
+  return "/";
+}
+
+function canAccessPath(role: "admin" | "seller" | "production", path: string) {
+  // Mantém simples e seguro: cada papel tem seu "home" próprio.
+  // Admin acessa apenas o dashboard admin (/) neste app.
+  if (role === "admin") return path === "/";
+  if (role === "seller") return path === "/vendedor";
+  if (role === "production") return path === "/producao";
+  return false;
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,7 +48,6 @@ export default function Login() {
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [signupOpen, setSignupOpen] = useState(false);
 
   const redirectTo = useMemo(() => {
     return typeof state.from === "string" && state.from.startsWith("/") ? state.from : "/";
@@ -49,27 +55,11 @@ export default function Login() {
 
   useEffect(() => {
     if (!user) return;
-    const destination =
-      typeof state.from === "string" && state.from.startsWith("/")
-        ? state.from
-        : user.role === "seller"
-          ? "/vendedor"
-          : user.role === "production"
-            ? "/producao"
-            : "/";
+    const fromPath = typeof state.from === "string" && state.from.startsWith("/") ? state.from : null;
+    const destination = fromPath && canAccessPath(user.role, fromPath) ? fromPath : homeForRole(user.role);
     navigate(destination, { replace: true });
   }, [navigate, state.from, user]);
 
-  useEffect(() => {
-    let alive = true;
-    void isSignupOpen().then((open) => {
-      if (!alive) return;
-      setSignupOpen(open);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,12 +75,15 @@ export default function Login() {
 
     const result = await signInWithPassword({ email, password });
     if (result.error) {
-      setError("Email ou senha inválidos");
+      if (result.error.toLowerCase().includes("email not confirmed")) {
+        setError("Email ainda não confirmado. Verifique sua caixa de entrada (ou desative a confirmação de email no Supabase para testar). ");
+      } else {
+        setError("Email ou senha inválidos");
+      }
       return;
     }
 
     // O redirecionamento final acontece via useEffect (quando o role carregar).
-    navigate(redirectTo, { replace: true });
   };
 
   return (
@@ -154,14 +147,9 @@ export default function Login() {
                     Entrar
                   </Button>
 
-                  {signupOpen ? (
-                    <p className="text-sm text-muted-foreground">
-                      Primeiro acesso?{" "}
-                      <Link to="/signup" className="underline underline-offset-4">
-                        Criar conta
-                      </Link>
-                    </p>
-                  ) : null}
+                  <p className="text-sm text-muted-foreground">
+                    Primeiro acesso? Peça ao admin para criar seu usuário.
+                  </p>
                 </form>
               </CardContent>
             </Card>

@@ -1,39 +1,44 @@
-import { motion } from 'framer-motion';
-import { 
-  DollarSign, 
-  FolderKanban, 
-  TrendingUp, 
-  Clock, 
-  Users, 
+import { motion } from "framer-motion";
+import {
+  DollarSign,
+  FolderKanban,
+  TrendingUp,
+  Clock,
+  Users,
   Wallet,
+  Megaphone,
   Plus,
   ArrowRight,
-  Target
-} from 'lucide-react';
-import { useAxion } from '@/contexts/AxionContext';
-import { MetricCard } from '@/components/common/MetricCard';
-import { Button } from '@/components/ui/button';
-import { format, parseISO, differenceInDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+  Target,
+  Percent,
+} from "lucide-react";
+import { MetricCard } from "@/components/common/MetricCard";
+import { Button } from "@/components/ui/button";
+import { format, parseISO, differenceInDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { useAxion } from "@/contexts/AxionContext";
+import { useFlowCards } from "@/hooks/useFlowCards";
+import { useSellerRankingLast30Days } from "@/hooks/useSellerRanking";
+import { useDashboardKpis } from "@/hooks/useDashboardKpis";
 
 const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
   }).format(value);
 };
 
 export function Dashboard() {
-  const { metrics, flowCards, team, setActiveModule } = useAxion();
+  const { setActiveModule, dateRange } = useAxion();
+  const { data: flowCards = [] } = useFlowCards();
+  const { entries: rankingEntries } = useSellerRankingLast30Days();
 
-  // Próximas entregas baseadas nos flowCards com deadline
+  const kpis = useDashboardKpis(dateRange);
+  const taxAmount = kpis.revenue * (kpis.taxRate / 100);
+
   const upcomingDeadlines = flowCards
-    .filter(card => card.status !== 'concluido' && card.deadline)
-    .sort((a, b) => new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime())
-    .slice(0, 5);
-
-  const topPerformers = [...team]
-    .sort((a, b) => b.performance - a.performance)
+    .filter((card) => card.status !== "concluido" && card.deadline)
+    .sort((a, b) => new Date(a.deadline || "").getTime() - new Date(b.deadline || "").getTime())
     .slice(0, 5);
 
   return (
@@ -58,53 +63,86 @@ export function Dashboard() {
       </motion.div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
         <MetricCard
           title="Faturamento Mensal"
-          value={formatCurrency(metrics.monthlyRevenue)}
+          value={formatCurrency(kpis.revenue)}
           icon={DollarSign}
           variant="primary"
-          trend={{ value: 12, isPositive: true }}
           delay={0}
         />
         <MetricCard
           title="Projetos Ativos"
-          value={metrics.activeProjects}
+          value={kpis.activeProjects}
           icon={FolderKanban}
           variant="default"
           delay={0.1}
         />
         <MetricCard
           title="Lucro Líquido"
-          value={formatCurrency(metrics.netProfit)}
+          value={formatCurrency(kpis.netProfit)}
           icon={TrendingUp}
           variant="success"
-          trend={{ value: 8, isPositive: true }}
           delay={0.2}
         />
         <MetricCard
           title="A Receber"
-          value={formatCurrency(metrics.receivables)}
+          value={formatCurrency(kpis.receivables)}
           icon={Clock}
           variant="warning"
           delay={0.3}
         />
         <MetricCard
           title="ROI de Tráfego"
-          value={`${metrics.trafficROI.toFixed(1)}%`}
+          value={`${kpis.trafficROI.toFixed(1)}%`}
           icon={Target}
-          variant={metrics.trafficROI >= 0 ? "success" : "danger"}
-          trend={{ value: Math.abs(metrics.trafficROI), isPositive: metrics.trafficROI >= 0 }}
+          variant={kpis.trafficROI >= 0 ? "success" : "danger"}
+          trend={{ value: Math.abs(Number(kpis.trafficROI.toFixed(1))), isPositive: kpis.trafficROI >= 0 }}
           delay={0.4}
         />
         <MetricCard
-          title="Custo Operacional"
-          value={formatCurrency(metrics.operationalCost)}
-          icon={Wallet}
-          variant="danger"
+          title="Gasto em Tráfego"
+          value={formatCurrency(kpis.trafficCosts)}
+          icon={Megaphone}
+          variant="warning"
           delay={0.5}
         />
+        <MetricCard
+          title="Custo Operacional"
+          value={formatCurrency(kpis.operationalCost)}
+          icon={Wallet}
+          variant="danger"
+          delay={0.6}
+        />
       </div>
+
+      {/* Tax highlight (separado da linha de cards) */}
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="glass-card p-5"
+        aria-label="Resumo de imposto"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-warning/15 text-warning flex items-center justify-center shrink-0">
+              <Percent className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-foreground">Imposto</h3>
+              <p className="text-sm text-muted-foreground">
+                Estimativa no período ({kpis.taxRate}% sobre o faturamento)
+              </p>
+            </div>
+          </div>
+
+          <div className="text-left sm:text-right">
+            <p className="text-2xl font-bold text-foreground tabular-nums">{formatCurrency(taxAmount)}</p>
+            <p className="text-xs text-muted-foreground">valor destinado a imposto</p>
+          </div>
+        </div>
+      </motion.section>
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -189,22 +227,22 @@ export function Dashboard() {
             </Button>
           </div>
 
-          {topPerformers.length === 0 ? (
+          {rankingEntries.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>Nenhum membro cadastrado</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {topPerformers.map((member, index) => (
+              {rankingEntries.slice(0, 5).map((entry, index) => (
                 <div
-                  key={member.id}
+                  key={entry.id}
                   className="flex items-center gap-4 p-3 rounded-lg bg-secondary/50"
                 >
                   <div className="relative">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                       <span className="text-sm font-semibold text-primary-foreground">
-                        {member.name.charAt(0)}
+                        {entry.name.charAt(0)}
                       </span>
                     </div>
                     {index < 3 && (
@@ -218,12 +256,14 @@ export function Dashboard() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">{member.name}</p>
-                    <p className="text-sm text-muted-foreground">{member.role}</p>
+                    <p className="font-medium text-foreground truncate">{entry.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {entry.dealsWon} fechamentos
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-foreground">{member.performance}%</p>
-                    <p className="text-xs text-muted-foreground">performance</p>
+                    <p className="font-semibold text-foreground">{formatCurrency(entry.revenue)}</p>
+                    <p className="text-xs text-muted-foreground">faturamento 30d</p>
                   </div>
                 </div>
               ))}

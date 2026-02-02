@@ -1,6 +1,7 @@
 import { FolderKanban, List, CalendarDays, Settings, Workflow } from "lucide-react";
 import type { ProducaoSection } from "@/components/producao/types";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "@/components/common/BrandMark";
 
 type Props = {
   activeSection: ProducaoSection;
@@ -9,8 +10,6 @@ type Props = {
 
 const items: Array<{ id: ProducaoSection; label: string; icon: typeof FolderKanban }> = [
   { id: "fluxo", label: "Fluxo", icon: Workflow },
-  { id: "kanban", label: "Kanban", icon: FolderKanban },
-  { id: "lista", label: "Lista", icon: List },
   { id: "calendario", label: "Calendário", icon: CalendarDays },
   { id: "settings", label: "Configurações", icon: Settings },
 ];
@@ -18,7 +17,9 @@ const items: Array<{ id: ProducaoSection; label: string; icon: typeof FolderKanb
 export function ProducaoSidebar({ activeSection, onChangeSection }: Props) {
   return (
     <aside className="hidden h-screen w-72 flex-col border-r border-border bg-background/60 p-4 md:flex">
-      <div className="mb-3 text-sm font-semibold text-foreground">Produção</div>
+      <div className="mb-3">
+        <BrandMark />
+      </div>
       <nav className="space-y-1">
         {items.map((item) => {
           const Icon = item.icon;

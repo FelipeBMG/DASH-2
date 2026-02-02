@@ -80,7 +80,12 @@ export function MetricCard({
         
         <div>
           <p className="text-sm text-muted-foreground mb-1">{title}</p>
-          <p className="text-2xl font-bold text-foreground">{value}</p>
+          <p
+            className="text-xl font-bold text-foreground leading-tight text-left tabular-nums overflow-hidden text-ellipsis whitespace-nowrap md:text-2xl"
+            title={String(value)}
+          >
+            {value}
+          </p>
           {subtitle && (
             <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
           )}

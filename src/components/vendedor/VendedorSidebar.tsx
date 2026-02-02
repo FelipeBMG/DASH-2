@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronLeft, Calendar, Settings, Headset, Zap, Workflow } from "lucide-react";
+import { ChevronLeft, Calendar, Settings, Headset, Workflow } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { VendedorSection } from "@/components/vendedor/types";
+import { BrandMark } from "@/components/common/BrandMark";
 
 const items: { id: VendedorSection; label: string; icon: typeof Headset }[] = [
   { id: "atendimento", label: "Atendimento", icon: Headset },
@@ -30,16 +31,13 @@ export function VendedorSidebar({ activeSection, onChangeSection }: Props) {
       )}
     >
       <div className="h-16 flex items-center justify-between px-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-primary to-accent">
-            <Zap className="w-5 h-5 text-primary-foreground" />
-          </div>
-          {!collapsed ? (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col">
-              <span className="font-bold text-lg gradient-text">AXION</span>
-              <span className="text-[10px] text-muted-foreground -mt-1">Vendedor</span>
-            </motion.div>
-          ) : null}
+        <div className="min-w-0">
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <BrandMark collapsed={collapsed} />
+          </motion.div>
         </div>
 
         <button
@@ -88,7 +86,6 @@ export function VendedorSidebar({ activeSection, onChangeSection }: Props) {
           {!collapsed ? (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground truncate">vendedor</p>
-              <p className="text-xs text-muted-foreground truncate">AXION</p>
             </div>
           ) : null}
         </div>

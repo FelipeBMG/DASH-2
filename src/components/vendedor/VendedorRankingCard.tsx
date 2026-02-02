@@ -23,7 +23,7 @@ export function VendedorRankingCard({ entries }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-foreground">Top 5 Vendedores</h2>
-          <p className="text-xs text-muted-foreground">Performance do mês (mock)</p>
+          <p className="text-xs text-muted-foreground">Últimos 30 dias</p>
         </div>
         <div className="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
           <Trophy className="w-4 h-4" />

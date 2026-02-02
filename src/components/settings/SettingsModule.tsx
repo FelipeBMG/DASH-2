@@ -1,10 +1,13 @@
 import { useAxion } from '@/contexts/AxionContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AdminSettingsForm } from '@/components/settings/AdminSettingsForm';
-import { AdminCollaboratorsTab } from '@/components/settings/AdminCollaboratorsTab';
+import { useAuth } from '@/contexts/AuthContext';
+import { AdminProductsTab } from '@/components/settings/AdminProductsTab';
 
 export function SettingsModule() {
   const { settings, setSettings } = useAxion();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -14,9 +17,12 @@ export function SettingsModule() {
             <TabsTrigger value="geral" className="rounded-full px-4">
               Visão Geral
             </TabsTrigger>
-            <TabsTrigger value="colaboradores" className="rounded-full px-4">
-              Colaboradores
-            </TabsTrigger>
+
+            {isAdmin ? (
+              <TabsTrigger value="produtos" className="rounded-full px-4">
+                Produtos
+              </TabsTrigger>
+            ) : null}
           </TabsList>
         </div>
 
@@ -24,9 +30,11 @@ export function SettingsModule() {
           <AdminSettingsForm settings={settings} setSettings={(next) => setSettings(next)} />
         </TabsContent>
 
-        <TabsContent value="colaboradores">
-          <AdminCollaboratorsTab />
-        </TabsContent>
+        {isAdmin ? (
+          <TabsContent value="produtos">
+            <AdminProductsTab />
+          </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   );

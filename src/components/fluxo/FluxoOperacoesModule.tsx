@@ -23,6 +23,11 @@ import type { FlowCard, FlowCardStatus } from '@/types/axion';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFlowCards } from '@/hooks/useFlowCards';
+import { uploadFlowCardFile } from '@/lib/flowCardStorage';
+import { createFlowCardAttachment, listFlowCardAttachmentsByCard } from '@/lib/flowCardAttachmentsApi';
+import { FlowCardViewer } from './FlowCardViewer';
+import { isDefaultDateRange, shouldShowByDateRange, shouldShowConcludedCard } from './flowVisibility';
 
 const columns: { id: FlowCardStatus; title: string; color: string }[] = [
   { id: 'leads', title: 'Leads (Entrada)', color: 'bg-blue-500' },
@@ -41,10 +46,20 @@ const formatCurrency = (value: number) => {
 };
 
 export function FluxoOperacoesModule() {
-  const { flowCards, setFlowCards, openModal, closeModal } = useAxion();
+  const { openModal, closeModal, dateRange } = useAxion();
+  const {
+    data: flowCards = [],
+    isLoading,
+    isError,
+    error,
+    createFlowCard,
+    updateFlowCard,
+    deleteFlowCard,
+  } = useFlowCards();
   const [draggedCard, setDraggedCard] = useState<FlowCard | null>(null);
   const { user: authUser } = useAuth();
   const isAdmin = authUser?.role === 'admin';
+  const isCustomDateRange = !isDefaultDateRange(dateRange);
 
   const handleDragStart = (card: FlowCard) => {
     setDraggedCard(card);
@@ -54,13 +69,15 @@ export function FluxoOperacoesModule() {
     e.preventDefault();
   };
 
-  const handleDrop = (status: FlowCardStatus) => {
+  const handleDrop = async (status: FlowCardStatus) => {
     if (draggedCard && draggedCard.status !== status) {
-      setFlowCards(prev => prev.map(card => 
-        card.id === draggedCard.id 
-          ? { ...card, status, updatedAt: new Date().toISOString() }
-          : card
-      ));
+      const before = draggedCard;
+      await updateFlowCard({
+        id: draggedCard.id,
+        patch: { status },
+        before,
+        action: 'moved',
+      });
     }
     setDraggedCard(null);
   };
@@ -68,20 +85,34 @@ export function FluxoOperacoesModule() {
   const handleNewCard = () => {
     openModal(
       <FlowCardForm
-        onSubmit={(card) => {
+        onSubmit={async (card, files) => {
           const createdById = card.createdById || authUser?.id || '';
           const createdByName = card.createdByName || authUser?.name || authUser?.email || '';
-          setFlowCards(prev => [
-            ...prev,
-            {
-              ...card,
-              createdById,
-              createdByName,
-              id: crypto.randomUUID(),
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-          ]);
+          const created = await createFlowCard({
+            ...card,
+            createdById,
+            createdByName,
+          });
+
+          const uploadQueue = [
+            files.image ? { file: files.image } : null,
+            files.audio ? { file: files.audio } : null,
+            files.other ? { file: files.other } : null,
+          ].filter(Boolean) as Array<{ file: File }>;
+
+          for (const item of uploadQueue) {
+            const uploaded = await uploadFlowCardFile({ flowCardId: created.id, file: item.file });
+            await createFlowCardAttachment({
+              flowCardId: created.id,
+              uploadedById: authUser?.id,
+              fileName: item.file.name,
+              mimeType: item.file.type || 'application/octet-stream',
+              bucketId: uploaded.bucketId,
+              objectPath: uploaded.objectPath,
+              publicUrl: uploaded.publicUrl,
+            });
+          }
+
           closeModal();
         }}
         onCancel={closeModal}
@@ -90,31 +121,84 @@ export function FluxoOperacoesModule() {
   };
 
   const handleEditCard = (card: FlowCard) => {
-    openModal(
-      <FlowCardForm
-        card={card}
-        onSubmit={(updatedCard) => {
-          setFlowCards(prev =>
-            prev.map(c =>
-              c.id === card.id
-                ? {
-                    ...updatedCard,
-                    id: card.id,
-                    createdAt: card.createdAt,
-                    updatedAt: new Date().toISOString(),
-                  }
-                : c
-            )
-          );
-          closeModal();
-        }}
-        onCancel={closeModal}
-      />
-    );
+    (async () => {
+      const attachments = await listFlowCardAttachmentsByCard(card.id).catch(() => []);
+
+      openModal(
+        <FlowCardForm
+          card={card}
+          attachments={attachments}
+          onSubmit={async (updatedCard, files) => {
+            await updateFlowCard({
+              id: card.id,
+              patch: {
+                date: updatedCard.date,
+                clientName: updatedCard.clientName,
+                  whatsapp: updatedCard.whatsapp,
+                leadsCount: updatedCard.leadsCount,
+                quantity: updatedCard.quantity,
+                entryValue: updatedCard.entryValue,
+                  receivedValue: updatedCard.receivedValue,
+                  productId: updatedCard.productId,
+                category: updatedCard.category,
+                status: updatedCard.status,
+                attendantId: updatedCard.attendantId,
+                attendantName: updatedCard.attendantName,
+                productionResponsibleId: updatedCard.productionResponsibleId,
+                productionResponsibleName: updatedCard.productionResponsibleName,
+                deadline: updatedCard.deadline,
+                notes: updatedCard.notes,
+              },
+              before: card,
+              action: 'updated',
+            });
+
+            const uploadQueue = [
+              files.image ? { file: files.image } : null,
+              files.audio ? { file: files.audio } : null,
+              files.other ? { file: files.other } : null,
+            ].filter(Boolean) as Array<{ file: File }>;
+
+            for (const item of uploadQueue) {
+              const uploaded = await uploadFlowCardFile({ flowCardId: card.id, file: item.file });
+              await createFlowCardAttachment({
+                flowCardId: card.id,
+                uploadedById: authUser?.id,
+                fileName: item.file.name,
+                mimeType: item.file.type || 'application/octet-stream',
+                bucketId: uploaded.bucketId,
+                objectPath: uploaded.objectPath,
+                publicUrl: uploaded.publicUrl,
+              });
+            }
+
+            closeModal();
+          }}
+          onCancel={closeModal}
+        />
+      );
+    })();
   };
 
-  const handleDeleteCard = (cardId: string) => {
-    setFlowCards(prev => prev.filter(c => c.id !== cardId));
+  const handleViewCard = (card: FlowCard) => {
+    (async () => {
+      const attachments = await listFlowCardAttachmentsByCard(card.id).catch(() => []);
+      openModal(
+        <FlowCardViewer
+          card={card}
+          attachments={attachments}
+          onEdit={() => {
+            closeModal();
+            handleEditCard(card);
+          }}
+        />
+      );
+    })();
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    const before = flowCards.find((c) => c.id === cardId) ?? null;
+    await deleteFlowCard({ id: cardId, before });
   };
 
   const canSeeCard = (card: FlowCard) => {
@@ -131,10 +215,25 @@ export function FluxoOperacoesModule() {
   };
 
   const getCardsByStatus = (status: FlowCardStatus) =>
-    flowCards.filter(card => card.status === status).filter(canSeeCard);
+    flowCards
+      .filter((card) => card.status === status)
+      .filter(canSeeCard)
+      .filter((card) => shouldShowByDateRange(card, dateRange, { isCustomDateRange }))
+      .filter((card) => {
+        if (card.status !== 'concluido') return true;
+        return shouldShowConcludedCard(card, { isCustomDateRange });
+      });
 
   return (
     <div className="space-y-6 h-full">
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground">Carregando cards…</div>
+      ) : null}
+      {isError ? (
+        <div className="text-sm text-destructive">
+          Falha ao carregar cards: {(error as Error | null)?.message ?? 'erro desconhecido'}
+        </div>
+      ) : null}
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -179,6 +278,7 @@ export function FluxoOperacoesModule() {
                   key={card.id}
                   draggable
                   onDragStart={() => handleDragStart(card)}
+                  onClick={() => handleViewCard(card)}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="group relative cursor-grab active:cursor-grabbing rounded-xl border border-border/60 bg-card/70 p-3.5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card/80 hover:shadow-md"
@@ -193,17 +293,26 @@ export function FluxoOperacoesModule() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 opacity-0 transition-opacity hover:bg-secondary/60 group-hover:opacity-100"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <MoreHorizontal className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEditCard(card)}>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditCard(card);
+                          }}
+                        >
                           <Pencil className="w-4 h-4 mr-2" />
                           Editar
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          onClick={() => handleDeleteCard(card.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCard(card.id);
+                          }}
                           className="text-destructive"
                         >
                           <Trash2 className="w-4 h-4 mr-2" />

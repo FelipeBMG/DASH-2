@@ -5,11 +5,19 @@ import { ClipboardList, Handshake, PhoneCall } from "lucide-react";
 import { MetricCard } from "@/components/common/MetricCard";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { vendedorMockRanking } from "@/components/vendedor/mock";
 import { VendedorRankingCard } from "@/components/vendedor/VendedorRankingCard";
-import { useAxion } from "@/contexts/AxionContext";
 import type { FlowCardStatus } from "@/types/axion";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFlowCards } from "@/hooks/useFlowCards";
+import { useSellerRankingLast30Days } from "@/hooks/useSellerRanking";
+import { toast } from "sonner";
+import { buildWaMeUrl, normalizeBrazilPhoneToE164 } from "@/lib/whatsapp";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -44,9 +52,10 @@ function statusBadgeClass(status: FlowCardStatus) {
   }
 }
 
-export function VendedorAtendimentoPanel() {
-  const { flowCards } = useAxion();
+export function VendedorAtendimentoPanel(props: { onNewAtendimento?: () => void }) {
   const { user: authUser } = useAuth();
+  const { data: flowCards = [] } = useFlowCards();
+  const { entries: rankingEntries } = useSellerRankingLast30Days();
 
   // Requisito: "Só meus cards" (vendedor)
   const myActiveCards = useMemo(() => {
@@ -62,12 +71,42 @@ export function VendedorAtendimentoPanel() {
           client: c.clientName,
           stage: c.status as FlowCardStatus,
           value: c.entryValue,
+          whatsapp: c.whatsapp,
           nextAction: "Acompanhar",
           dueDate: dueISO,
         };
       })
       .sort((a, b) => b.dueDate.localeCompare(a.dueDate));
   }, [flowCards, authUser]);
+
+  const getWhatsAppHref = (raw: string | undefined) => {
+    const normalized = raw ? normalizeBrazilPhoneToE164(raw) : null;
+    return normalized ? buildWaMeUrl(normalized) : null;
+  };
+
+  const getWhatsAppDigits = (raw: string | undefined) => {
+    const normalized = raw ? normalizeBrazilPhoneToE164(raw) : null;
+    return normalized;
+  };
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Copiado!");
+    } catch {
+      // fallback simples
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "true");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      toast("Copiado!");
+    }
+  };
 
   const summary = useMemo(() => {
     const todayISO = new Date().toISOString().split("T")[0];
@@ -90,7 +129,7 @@ export function VendedorAtendimentoPanel() {
         <MetricCard
           title="Previsão em negociação"
           value={formatBRL(summary.totalValue)}
-          subtitle="Pipeline atual (mock)"
+          subtitle="Pipeline atual"
           icon={Handshake}
           variant="success"
           delay={0.05}
@@ -113,7 +152,9 @@ export function VendedorAtendimentoPanel() {
                 <h2 className="text-lg font-semibold text-foreground">Painel de Atendimento</h2>
                 <p className="text-sm text-muted-foreground">Atendimentos ativos vindos do Fluxo de Operações</p>
               </div>
-              <Button variant="outline">Novo atendimento</Button>
+              <Button variant="outline" onClick={props.onNewAtendimento}>
+                Novo atendimento
+              </Button>
             </div>
 
             <div className="mt-5 grid grid-cols-1 gap-3">
@@ -145,7 +186,49 @@ export function VendedorAtendimentoPanel() {
                     <span className="text-xs text-muted-foreground">{formatBRL(a.value)}</span>
                     <span className="text-xs text-muted-foreground">•</span>
                     <span className="text-xs text-muted-foreground">{new Date(a.dueDate).toLocaleDateString("pt-BR")}</span>
-                    <Button size="sm" className="btn-primary">Abrir</Button>
+                    {getWhatsAppHref(a.whatsapp) ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" className="btn-primary" type="button">
+                            Abrir
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <a
+                              href={getWhatsAppHref(a.whatsapp) ?? "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Abrir WhatsApp
+                            </a>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => void copyText(getWhatsAppHref(a.whatsapp) ?? "")}
+                          >
+                            Copiar link
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              const digits = getWhatsAppDigits(a.whatsapp);
+                              if (!digits) return;
+                              void copyText(digits);
+                            }}
+                          >
+                            Copiar número
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="btn-primary"
+                        type="button"
+                        onClick={() => toast("Este atendimento não tem número de WhatsApp.")}
+                      >
+                        Abrir
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -154,7 +237,7 @@ export function VendedorAtendimentoPanel() {
         </div>
 
         <div className="space-y-6">
-          <VendedorRankingCard entries={vendedorMockRanking} />
+          <VendedorRankingCard entries={rankingEntries} />
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { z } from "zod";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, User } from "lucide-react";
@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { getSupabase, isSupabaseConfigured } from "@/lib/supabaseClient";
+import { getSupabase } from "@/lib/supabaseClient";
 import { upsertMyUserProfile } from "@/lib/userProfilesApi";
+import { useAuth } from "@/contexts/AuthContext";
 
 const signupSchema = z
   .object({
@@ -18,21 +19,34 @@ const signupSchema = z
   })
   .strict();
 
-async function isSignupOpen(): Promise<boolean> {
-  if (!isSupabaseConfigured) return false;
-  const supabase = getSupabase();
-
-  // Prefer server-side decision (recommended). If function doesn't exist yet,
-  // we fallback to "open" to allow first-user bootstrap.
-  const { data, error } = await supabase.rpc("is_signup_open");
-  if (error) return true;
-  return Boolean(data);
-}
-
 export default function Signup() {
   const navigate = useNavigate();
-  const [checking, setChecking] = useState(true);
-  const [open, setOpen] = useState(false);
+  const { user } = useAuth();
+
+  // Cadastro público desabilitado: apenas admin pode acessar esta página.
+  // Exceção: permitir cadastro quando o usuário ainda NÃO está logado (bootstrap do primeiro admin).
+  if (user && user.role !== "admin") {
+    return (
+      <main className="min-h-screen bg-background">
+        <h1 className="sr-only">Cadastro desabilitado</h1>
+        <section className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-10 sm:px-6">
+          <Card className="glass-card w-full">
+            <CardHeader className="space-y-2">
+              <CardTitle className="text-2xl">Cadastro desabilitado</CardTitle>
+              <CardDescription>
+                O cadastro público foi restringido. Entre com uma conta de admin para criar usuários.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full" onClick={() => navigate("/login", { replace: true })}>
+                Ir para login
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
+      </main>
+    );
+  }
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -44,30 +58,9 @@ export default function Signup() {
     return name.trim().length >= 2 && email.trim().length > 0 && password.trim().length >= 6;
   }, [email, name, password]);
 
-  useEffect(() => {
-    let alive = true;
-    setChecking(true);
-    void isSignupOpen()
-      .then((value) => {
-        if (!alive) return;
-        setOpen(value);
-      })
-      .finally(() => {
-        if (!alive) return;
-        setChecking(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [navigate]);
-
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!isSupabaseConfigured) {
-      setError("Backend não configurado");
-      return;
-    }
 
     const parsed = signupSchema.safeParse({ name, email, password });
     if (!parsed.success) {
@@ -84,6 +77,9 @@ export default function Signup() {
         options: {
           // Ensures email confirmation links (when enabled) return to this app.
           emailRedirectTo: window.location.origin,
+          data: {
+            name: parsed.data.name,
+          },
         },
       });
       if (signUpError) {
@@ -92,7 +88,9 @@ export default function Signup() {
       }
 
       // If session is immediately available (email confirmations off), create profile now.
-      const userId = data.user?.id;
+      // Só tenta salvar o perfil quando já existe sessão.
+      // Se a confirmação de email estiver habilitada, não haverá sessão aqui.
+      const userId = data.session?.user?.id;
       if (userId) {
         try {
           await upsertMyUserProfile({
@@ -102,20 +100,21 @@ export default function Signup() {
             phone: "",
           });
         } catch (profileErr) {
-          const message = profileErr instanceof Error ? profileErr.message : "Erro ao salvar perfil";
-          setError(message);
-          return;
+          // Não bloqueia o cadastro se o perfil falhar; apenas registra para diagnóstico.
+          // eslint-disable-next-line no-console
+          console.error("Erro ao salvar perfil do usuário", profileErr);
         }
       }
 
       // Login flow continues via /login (role assignment is handled after you promote to admin).
       navigate("/login", { replace: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao criar conta";
+      setError(message);
     } finally {
       setSubmitting(false);
     }
   };
-
-  if (checking) return null;
 
   return (
     <main className="min-h-screen bg-background">
@@ -133,24 +132,12 @@ export default function Signup() {
             <CardHeader className="space-y-2">
               <CardTitle className="text-2xl">Criar conta</CardTitle>
               <CardDescription>
-                {open
-                  ? "Crie seu acesso inicial. Depois você pode desativar o cadastro aberto."
-                  : "Cadastro desativado. Entre com sua conta ou peça para um admin criar/invitar seu acesso."}
+                Crie seu acesso inicial. Depois você pode, se quiser, desativar o cadastro aberto no painel de
+                administração.
               </CardDescription>
             </CardHeader>
 
             <CardContent>
-              {!open ? (
-                <div className="space-y-4">
-                  <Button className="w-full" variant="secondary" onClick={() => navigate("/login", { replace: true })}>
-                    Ir para login
-                  </Button>
-
-                  <p className="text-sm text-muted-foreground">
-                    Se você ainda não tem nenhum admin, abra o cadastro apenas temporariamente e tente novamente.
-                  </p>
-                </div>
-              ) : (
               <form onSubmit={onSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome</Label>
@@ -208,7 +195,6 @@ export default function Signup() {
                   </Link>
                 </p>
               </form>
-              )}
             </CardContent>
           </Card>
         </div>

@@ -1,0 +1,10 @@
+project_id = "xquudzbxonbvodprxvfr"
+
+[functions.drive-upload]
+verify_jwt = false
+
+[functions.drive-delete]
+verify_jwt = false
+
+[functions.drive-download]
+verify_jwt = false

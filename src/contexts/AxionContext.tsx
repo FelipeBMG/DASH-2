@@ -55,8 +55,8 @@ interface AxionContextType {
 
 const defaultUser: User = {
   id: '1',
-  name: 'Admin AXION',
-  email: 'admin@axion.dev',
+  name: 'Admin',
+  email: 'admin@exemplo.com',
   role: 'admin',
 };
 
@@ -64,7 +64,7 @@ const defaultSettings: Settings = {
   name: 'Felipe',
   email: 'felipe@email.com',
   phone: '',
-  companyName: 'AXION Agency',
+  companyName: 'Empresa',
   taxRate: 15,
   currency: 'BRL',
 };

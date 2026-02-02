@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { z } from "zod";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Building2, DollarSign, LogOut, Mail, Percent, Phone, Save, User } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Settings as SettingsType } from "@/types/axion";
+import { useAppSettings } from "@/hooks/useAppSettings";
+import { updateAppSettings } from "@/lib/appSettingsApi";
 
 const settingsSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome").max(80, "Nome muito longo"),
@@ -31,20 +34,70 @@ export function AdminSettingsForm({ settings, setSettings }: Props) {
   const navigate = useNavigate();
   const { signOut } = useAuth();
 
+  const queryClient = useQueryClient();
+  const { data: appSettings } = useAppSettings();
+
+  const appSettingsId = appSettings?.id;
+  const signupEnabled = appSettings?.signupEnabled ?? true;
+
   const [formData, setFormData] = useState(() => ({
     name: settings.name,
     email: settings.email,
     phone: settings.phone,
-    companyName: settings.companyName,
-    taxRate: settings.taxRate,
-    currency: settings.currency,
+    companyName: appSettings?.companyName ?? settings.companyName,
+    taxRate: appSettings?.taxRate ?? settings.taxRate,
+    currency: appSettings?.currency ?? settings.currency,
   }));
 
-  const handleSave = () => {
+  // Quando as configurações do Supabase carregarem, garantimos que o form reflita o valor base.
+  useEffect(() => {
+    if (!appSettings) return;
+    setFormData((prev) => ({
+      ...prev,
+      companyName: appSettings.companyName,
+      taxRate: appSettings.taxRate,
+      currency: appSettings.currency,
+    }));
+  }, [appSettings]);
+
+  const canPersistAppSettings = useMemo(() => Boolean(appSettingsId), [appSettingsId]);
+
+  const saveAppSettingsMutation = useMutation({
+    mutationFn: async (next: { companyName: string; taxRate: number; currency: string }) => {
+      if (!appSettingsId) throw new Error("Configuração base não encontrada no Supabase");
+      return updateAppSettings({
+        id: appSettingsId,
+        companyName: next.companyName,
+        currency: next.currency,
+        taxRate: next.taxRate,
+        signupEnabled,
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["app_settings"] });
+    },
+  });
+
+  const handleSave = async () => {
     const parsed = settingsSchema.safeParse(formData);
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Dados inválidos");
       return;
+    }
+
+    // Persiste os campos que são realmente “Configurações do Sistema” no Supabase.
+    // Assim o Dashboard (KPIs) sempre reflete a taxa base registrada em Configurações.
+    if (canPersistAppSettings) {
+      try {
+        await saveAppSettingsMutation.mutateAsync({
+          companyName: parsed.data.companyName,
+          taxRate: parsed.data.taxRate,
+          currency: parsed.data.currency,
+        });
+      } catch (e) {
+        toast.error("Não foi possível salvar a taxa de imposto no Supabase");
+        return;
+      }
     }
 
     setSettings(parsed.data as SettingsType);
@@ -165,7 +218,7 @@ export function AdminSettingsForm({ settings, setSettings }: Props) {
           <div className="pt-6 border-t border-border">
             <Button onClick={handleSave} className="btn-primary gap-2 w-full">
               <Save className="w-4 h-4" />
-              Salvar Configurações
+              {saveAppSettingsMutation.isPending ? "Salvando..." : "Salvar Configurações"}
             </Button>
 
             <Button onClick={handleLogout} variant="outline" className="mt-3 w-full gap-2">

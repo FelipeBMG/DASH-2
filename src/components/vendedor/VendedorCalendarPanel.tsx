@@ -17,8 +17,12 @@ import { ptBR } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { vendedorMockAppointments, vendedorMockRanking } from "@/components/vendedor/mock";
 import { VendedorRankingCard } from "@/components/vendedor/VendedorRankingCard";
+import type { VendedorAppointment } from "@/components/vendedor/types";
+import { useSellerRankingLast30Days } from "@/hooks/useSellerRanking";
+import { useFlowCards } from "@/hooks/useFlowCards";
+import { useQuery } from "@tanstack/react-query";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabaseClient";
 
 const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -43,7 +47,47 @@ export function VendedorCalendarPanel() {
   const startDay = monthStart.getDay();
   const paddingDays = Array(startDay).fill(null);
 
-  const appointments = vendedorMockAppointments;
+  const { entries: rankingEntries } = useSellerRankingLast30Days();
+  const { data: flowCards = [] } = useFlowCards();
+
+  const { data: calendarEvents = [] } = useQuery({
+    queryKey: ["calendar-events", format(monthStart, "yyyy-MM")],
+    enabled: Boolean(isSupabaseConfigured),
+    queryFn: async () => {
+      const supabase = getSupabase();
+      const startISO = monthStart.toISOString();
+      const endISO = monthEnd.toISOString();
+      const { data, error } = await supabase
+        .from("calendar_events")
+        .select("id,title,start_at")
+        .gte("start_at", startISO)
+        .lte("start_at", endISO)
+        .order("start_at", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; title: string; start_at: string }>;
+    },
+  });
+
+  const appointments = useMemo<VendedorAppointment[]>(() => {
+    const fromDb: VendedorAppointment[] = calendarEvents.map((e) => ({
+      id: `cal:${e.id}`,
+      title: e.title,
+      date: e.start_at.split("T")[0],
+      type: "meeting",
+    }));
+
+    const fromDeadlines: VendedorAppointment[] = flowCards
+      .filter((c) => Boolean(c.deadline))
+      .filter((c) => isSameMonth(parseISO(c.deadline as string), currentDate))
+      .map((c) => ({
+        id: `dl:${c.id}`,
+        title: `Prazo: ${c.clientName}`,
+        date: c.deadline as string,
+        type: "delivery" as const,
+      }));
+
+    return [...fromDb, ...fromDeadlines];
+  }, [calendarEvents, flowCards, currentDate]);
 
   const eventsForDay = useMemo(() => {
     return (date: Date) => appointments.filter((e) => isSameDay(parseISO(e.date), date));
@@ -55,7 +99,7 @@ export function VendedorCalendarPanel() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold text-foreground capitalize">{format(currentDate, "MMMM yyyy", { locale: ptBR })}</h2>
-            <p className="text-muted-foreground">Agendamentos, retornos e prazos (mock)</p>
+            <p className="text-muted-foreground">Agendamentos e prazos</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="icon" onClick={() => setCurrentDate((d) => subMonths(d, 1))}>
@@ -146,7 +190,7 @@ export function VendedorCalendarPanel() {
       </div>
 
       <div className="space-y-6">
-        <VendedorRankingCard entries={vendedorMockRanking} />
+        <VendedorRankingCard entries={rankingEntries} />
       </div>
     </div>
   );

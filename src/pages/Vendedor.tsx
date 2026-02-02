@@ -27,7 +27,9 @@ export default function Vendedor() {
 
   return (
     <VendedorLayout title={title} activeSection={activeSection} onChangeSection={setActiveSection}>
-      {activeSection === "atendimento" ? <VendedorAtendimentoPanel /> : null}
+      {activeSection === "atendimento" ? (
+        <VendedorAtendimentoPanel onNewAtendimento={() => setActiveSection("fluxo")} />
+      ) : null}
       {activeSection === "fluxo" ? <FluxoOperacoesModule /> : null}
       {activeSection === "calendar" ? <VendedorCalendarPanel /> : null}
       {activeSection === "settings" ? <VendedorSettingsPanel /> : null}

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabaseClient";
+import { upsertMyUserProfile } from "@/lib/userProfilesApi";
 
 export type AppRole = "admin" | "seller" | "production";
 
@@ -23,21 +24,31 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function fetchRoleForUser(userId: string): Promise<AppRole> {
-  const supabase = getSupabase();
-  // Roles MUST live in a separate table (user_roles). We read the current user's roles.
-  // If multiple roles exist, admin wins.
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
-
-  if (error) return "seller";
-
-  const roles = (data ?? []).map((r) => r.role) as Array<string>;
+function pickRoleFromRoles(roles: Array<string>): AppRole {
+  // Se múltiplos papéis existirem, admin ganha.
   if (roles.includes("admin")) return "admin";
   if (roles.includes("production")) return "production";
   return "seller";
+}
+
+async function fetchRolesForUser(userId: string): Promise<Array<string> | null> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  if (error) return null;
+  return (data ?? []).map((r) => r.role) as Array<string>;
+}
+
+async function tryBootstrapFirstAdmin(userId: string): Promise<boolean> {
+  const supabase = getSupabase();
+  // Preferência: RPC SECURITY DEFINER (evita depender de SELECT/INSERT direto que costuma dar 403 com RLS).
+  try {
+    const { data, error } = await supabase.rpc("bootstrap_first_admin");
+    if (error) return false;
+    return Boolean(data);
+  } catch {
+    // Se o RPC não existir ainda, não tenta fallback inseguro (inserção direta poderia ser bloqueada ou abrir brecha).
+    return false;
+  }
 }
 
 async function fetchProfileName(userId: string): Promise<string | null> {
@@ -76,7 +87,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const role = await fetchRoleForUser(next.user.id);
+      // Resolve role (com bootstrap do primeiro admin, se necessário).
+      let roles = await fetchRolesForUser(next.user.id);
+      if (roles && roles.length === 0) {
+        const bootstrapped = await tryBootstrapFirstAdmin(next.user.id);
+        if (bootstrapped) {
+          roles = await fetchRolesForUser(next.user.id);
+        }
+      }
+      const role = roles ? pickRoleFromRoles(roles) : "seller";
       const profileName = await fetchProfileName(next.user.id);
       if (!alive) return;
 
@@ -86,12 +105,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         name: profileName ?? next.user.email ?? "",
         role,
       });
+
+      // Garante criação/atualização de perfil após login (não bloqueante).
+      // Se RLS estiver restritivo, essa tentativa pode falhar — o app segue funcionando.
+      if (!profileName) {
+        const candidateName =
+          typeof (next.user.user_metadata as { name?: unknown } | null)?.name === "string"
+            ? String((next.user.user_metadata as { name?: unknown }).name).trim()
+            : "";
+
+        const nameToSave = candidateName || next.user.email || "";
+        if (nameToSave) {
+          setTimeout(() => {
+            void upsertMyUserProfile({
+              userId: next.user.id,
+              name: nameToSave,
+              email: next.user.email ?? "",
+              phone: "",
+            }).catch(() => {
+              // silencioso por padrão
+            });
+          }, 0);
+        }
+      }
     };
 
     // Listener first (recommended)
+    // IMPORTANT: não chamar Supabase dentro do callback para evitar deadlocks.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      void syncFromSession(s);
+      setSession(s);
       setLoading(false);
+      setTimeout(() => {
+        void syncFromSession(s);
+      }, 0);
     });
 
     // Then initial session

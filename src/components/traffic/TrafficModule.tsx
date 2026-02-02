@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, TrendingUp, Users, Target, DollarSign, Calendar, Trash2, Edit3 } from 'lucide-react';
 import { useAxion } from '@/contexts/AxionContext';
@@ -8,13 +8,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { TrafficEntry } from '@/types/axion';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 const META_TAX_RATE = 12.5;
 
 export function TrafficModule() {
   const { trafficEntries, setTrafficEntries, settings } = useAxion();
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TrafficEntry | null>(null);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     value: '',
@@ -40,14 +46,49 @@ export function TrafficModule() {
     setShowForm(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const isUuid = useMemo(() => {
+    const uuidRe =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return (value: string) => uuidRe.test(value);
+  }, []);
+
+  const getUuid = useMemo(() => {
+    // crypto.randomUUID pode falhar em alguns navegadores/ambientes.
+    // Geramos um UUID v4 “good enough” como fallback para não quebrar o salvamento no Supabase.
+    const fallbackV4 = () => {
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === "x" ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+    };
+    return () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cryptoAny = (globalThis as any)?.crypto;
+        if (cryptoAny?.randomUUID) return cryptoAny.randomUUID() as string;
+      } catch {
+        // ignore
+      }
+      return fallbackV4();
+    };
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (saving) return;
+    setSaving(true);
     
     const value = parseFloat(formData.value) || 0;
     const taxValue = value * (META_TAX_RATE / 100);
+
+    // Para integrar com o Supabase (financial_transactions.id é UUID), garantimos um UUID.
+    // Se estiver editando um lançamento antigo (id não-uuid do localStorage), migramos para UUID.
+    const newId = editingEntry && isUuid(editingEntry.id) ? editingEntry.id : getUuid();
     
     const entryData: TrafficEntry = {
-      id: editingEntry?.id || Date.now().toString(),
+      id: newId,
       date: formData.date,
       value,
       leads: parseInt(formData.leads) || 0,
@@ -63,7 +104,65 @@ export function TrafficModule() {
     } else {
       setTrafficEntries(prev => [entryData, ...prev]);
     }
+
+    // Persistir o gasto no financeiro (fonte única para o Dashboard)
+    // - value: total com imposto (Meta) para refletir o custo real
+    // - category: contém "Tráfego" para entrar no filtro de ROI do dashboard
+    try {
+      const { data, error } = await supabase
+        .from('financial_transactions')
+        .upsert(
+          {
+            id: entryData.id,
+            type: 'expense',
+            category: 'Tráfego pago',
+            cost_center: 'Marketing',
+            description: `Meta Ads — ${entryData.leads} leads / ${entryData.conversions} conv`,
+            value: Number(entryData.totalWithTax) || 0,
+            date: entryData.date,
+          },
+          { onConflict: 'id' },
+        )
+        .select('id');
+
+      if (error) {
+        // Deixa explícito no console para facilitar debug quando o toast não aparece.
+        console.error('[TrafficModule] upsert financial_transactions failed:', error);
+        toast({
+          title: 'Não foi possível salvar no Financeiro',
+          description: error.message,
+          variant: 'destructive',
+        });
+        setSaving(false);
+        return;
+      }
+
+      // Em alguns cenários, o upsert pode não retornar dados (dependendo de configuração);
+      // mas se retornou vazio, pelo menos garantimos que não houve erro.
+      if (Array.isArray(data) && data.length === 0) {
+        console.warn('[TrafficModule] upsert ok, mas sem retorno de rows (select id).');
+      }
+    } catch (err) {
+      console.error('[TrafficModule] unexpected error saving financial_transactions:', err);
+      toast({
+        title: 'Erro inesperado ao salvar',
+        description: err instanceof Error ? err.message : 'Tente novamente.',
+        variant: 'destructive',
+      });
+      setSaving(false);
+      return;
+    }
+
+    // Forçar atualização imediata do dashboard/financeiro
+    void qc.invalidateQueries({ queryKey: ['financial_transactions'] });
+
+    toast({
+      title: editingEntry ? 'Lançamento atualizado' : 'Lançamento salvo',
+      description: 'O Dashboard já deve refletir o gasto no período selecionado.',
+    });
+
     resetForm();
+    setSaving(false);
   };
 
   const handleEdit = (entry: TrafficEntry) => {
@@ -183,7 +282,7 @@ export function TrafficModule() {
                   <Button type="button" variant="outline" onClick={resetForm}>
                     Cancelar
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" disabled={saving}>
                     {editingEntry ? 'Salvar Alterações' : 'Salvar Lançamento'}
                   </Button>
                 </div>

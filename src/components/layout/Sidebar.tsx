@@ -8,7 +8,6 @@ import {
   FileText, 
   Settings,
   ChevronLeft,
-  Zap,
   Megaphone,
   Workflow
 } from 'lucide-react';
@@ -16,6 +15,7 @@ import { useAxion } from '@/contexts/AxionContext';
 import type { ModuleName } from '@/types/axion';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { BrandMark } from '@/components/common/BrandMark';
 
 const menuItems: { id: ModuleName; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -29,9 +29,24 @@ const menuItems: { id: ModuleName; label: string; icon: typeof LayoutDashboard }
   { id: 'settings', label: 'Configurações', icon: Settings },
 ];
 
+function roleLabel(role: unknown): string {
+  // AxionContext (legado): admin | manager | member
+  if (role === "admin") return "Administrador";
+  if (role === "manager") return "Gestor";
+  if (role === "member") return "Colaborador";
+
+  // AuthContext (novo): admin | seller | production
+  if (role === "seller") return "Vendedor";
+  if (role === "production") return "Produção";
+
+  return "Usuário";
+}
+
 export function Sidebar() {
-  const { activeModule, setActiveModule, currentUser, settings } = useAxion();
+  const { activeModule, setActiveModule, currentUser } = useAxion();
   const [collapsed, setCollapsed] = useState(false);
+
+  const userName = (currentUser?.name ?? "").trim();
 
   return (
     <motion.aside
@@ -44,20 +59,17 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-sidebar-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-primary to-accent">
-            <Zap className="w-5 h-5 text-primary-foreground" />
-          </div>
-          {!collapsed && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col"
-            >
-              <span className="font-bold text-lg gradient-text">AXION</span>
-              <span className="text-[10px] text-muted-foreground -mt-1">ERP System</span>
-            </motion.div>
-          )}
+        <div className="min-w-0">
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <BrandMark
+              collapsed={collapsed}
+              title={roleLabel(currentUser.role)}
+              subtitle={userName}
+            />
+          </motion.div>
         </div>
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -109,19 +121,17 @@ export function Sidebar() {
           "flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent/50",
           collapsed && "justify-center"
         )}>
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <span className="text-sm font-semibold text-primary-foreground">
-              {currentUser.name.charAt(0)}
-            </span>
-          </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">
-                {currentUser.name}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {settings.companyName}
-              </p>
+              <p className="text-sm font-medium text-foreground truncate">Criado por Felipe Gloria</p>
+              <a
+                href="https://felipegloria.site"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-muted-foreground truncate hover:underline"
+              >
+                felipegloria.site
+              </a>
             </div>
           )}
         </div>

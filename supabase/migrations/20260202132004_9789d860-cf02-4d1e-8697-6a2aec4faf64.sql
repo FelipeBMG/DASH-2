@@ -1,0 +1,2 @@
+ALTER TABLE public.flow_cards
+ADD COLUMN IF NOT EXISTS received_value NUMERIC NOT NULL DEFAULT 0;

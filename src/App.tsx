@@ -7,7 +7,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
-import { RequireAuth } from "@/components/auth/RequireAuth";
+import { RequireRole } from "@/components/auth/RequireAuth";
 import Vendedor from "./pages/Vendedor";
 import Producao from "./pages/Producao";
 
@@ -20,10 +20,31 @@ const App = () => (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-        <Route path="/" element={<RequireAuth><Index /></RequireAuth>} />
-        <Route path="/vendedor" element={<RequireAuth><Vendedor /></RequireAuth>} />
-        <Route path="/producao" element={<RequireAuth><Producao /></RequireAuth>} />
+        <Route path="/signup" element={<Signup />} />
+        <Route
+          path="/"
+          element={
+            <RequireRole allow={["admin"]}>
+              <Index />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/vendedor"
+          element={
+            <RequireRole allow={["seller"]}>
+              <Vendedor />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/producao"
+          element={
+            <RequireRole allow={["production"]}>
+              <Producao />
+            </RequireRole>
+          }
+        />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>

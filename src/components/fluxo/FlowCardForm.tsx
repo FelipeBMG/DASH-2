@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,16 +11,20 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useAxion } from '@/contexts/AxionContext';
-import type { FlowCard, FlowCardStatus } from '@/types/axion';
+import type { FlowCard, FlowCardAttachment, FlowCardStatus } from '@/types/axion';
 import { useAuth } from '@/contexts/AuthContext';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-
-type CollaboratorEntry = { id: string; name: string; role: 'vendedor' | 'producao' | 'admin' };
-const DEFAULT_SELLERS: CollaboratorEntry[] = [{ id: 'seller:vendedor', name: 'vendedor', role: 'vendedor' }];
+import { useFlowCollaborators } from '@/hooks/useFlowCollaborators';
+import { Badge } from '@/components/ui/badge';
+import { downloadDriveFile } from '@/lib/driveDownload';
+import { useProducts } from '@/hooks/useProducts';
 
 interface FlowCardFormProps {
   card?: FlowCard;
-  onSubmit: (card: Omit<FlowCard, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  attachments?: FlowCardAttachment[];
+  onSubmit: (
+    card: Omit<FlowCard, 'id' | 'createdAt' | 'updatedAt'>,
+    files: { image?: File | null; audio?: File | null; other?: File | null }
+  ) => void;
   onCancel: () => void;
 }
 
@@ -33,10 +37,25 @@ const statusOptions: { value: FlowCardStatus; label: string }[] = [
   { value: 'concluido', label: 'Concluído' },
 ];
 
-export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
+export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: FlowCardFormProps) {
   const { team } = useAxion();
-  const { user: authUser } = useAuth();
-  const [sellers] = useLocalStorage<CollaboratorEntry[]>('axion_sellers', DEFAULT_SELLERS);
+  const { user: authUser, session } = useAuth();
+  const { sellerOptions, productionOptions } = useFlowCollaborators();
+  const { data: products = [] } = useProducts({ activeOnly: true });
+
+  const downloadAttachment = useCallback(
+    async (a: FlowCardAttachment) => {
+      if (!session?.access_token) {
+        throw new Error('Você precisa estar logado para baixar.');
+      }
+      await downloadDriveFile({
+        accessToken: session.access_token,
+        fileId: a.objectPath,
+        fileName: a.fileName,
+      });
+    },
+    [session?.access_token],
+  );
 
   // Mantém os campos no modelo do card (para compatibilidade), mas não renderiza no form.
   // (pedido: remover “Leads” e “Quantidade”)
@@ -44,10 +63,13 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
   const [formData, setFormData] = useState({
     date: card?.date || new Date().toISOString().split('T')[0],
     clientName: card?.clientName || '',
+    whatsapp: card?.whatsapp || '',
     leadsCount: card?.leadsCount || 1,
     quantity: card?.quantity || 1,
     entryValue: card?.entryValue || 0,
-    category: card?.category || 'conteudo',
+    receivedValue: card?.receivedValue || 0,
+    productId: card?.productId || '',
+    category: card?.category || '',
     status: card?.status || 'leads' as FlowCardStatus,
     createdById: card?.createdById || authUser?.id || '',
     createdByName: card?.createdByName || authUser?.name || authUser?.email || '',
@@ -59,11 +81,15 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
     notes: card?.notes || '',
   });
 
-  const [showUploads, setShowUploads] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [otherFile, setOtherFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!imageFile) {
@@ -87,33 +113,33 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
     return () => URL.revokeObjectURL(url);
   }, [audioFile]);
 
-  const sellerOptions = useMemo(() => sellers.filter((s) => s.role === 'vendedor'), [sellers]);
-  const productionOptions = useMemo(() => sellers.filter((s) => s.role === 'producao'), [sellers]);
+  const hasSellerOptions = useMemo(() => sellerOptions.length > 0, [sellerOptions.length]);
+  const hasProductionOptions = useMemo(() => productionOptions.length > 0, [productionOptions.length]);
 
   const handleSellerChange = useCallback(
     (sellerId: string) => {
-    const seller = sellerOptions.find((s) => s.id === sellerId);
-    if (!seller) return;
+      const seller = sellerOptions.find((s) => s.id === sellerId);
+      if (!seller) return;
 
-    setFormData((prev) => ({
-      ...prev,
-      attendantId: seller.id,
-      attendantName: seller.name,
-    }));
+      setFormData((prev) => ({
+        ...prev,
+        attendantId: seller.id,
+        attendantName: seller.name,
+      }));
     },
     [sellerOptions],
   );
 
   const handleProductionChange = useCallback(
     (memberId: string) => {
-    const member = productionOptions.find((m) => m.id === memberId);
-    if (!member) return;
+      const member = productionOptions.find((m) => m.id === memberId);
+      if (!member) return;
 
-    setFormData((prev) => ({
-      ...prev,
-      productionResponsibleId: member.id,
-      productionResponsibleName: member.name,
-    }));
+      setFormData((prev) => ({
+        ...prev,
+        productionResponsibleId: member.id,
+        productionResponsibleName: member.name,
+      }));
     },
     [productionOptions],
   );
@@ -128,25 +154,79 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    onSubmit(
+      {
+        ...formData,
+        productId: formData.productId ? formData.productId : undefined,
+        // category é legado e NOT NULL no banco: mantenha string vazia quando não usado
+        category: formData.category ?? "",
+      },
+      { image: imageFile, audio: audioFile, other: otherFile }
+    );
   };
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-5 px-1 sm:px-2 md:px-0"
+      className="space-y-4 px-4 sm:px-6 pb-6"
     >
-      <header className="space-y-1 px-1 sm:px-2 md:px-0">
+      <header className="space-y-1">
         <h2 className="text-xl font-bold text-foreground">
           {card ? 'Editar Card' : 'Novo Card'}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Preencha os dados do lead e do processo. (Uploads serão integrados futuramente.)
+          Preencha os dados do lead e do processo. Você pode anexar arquivos ao card.
         </p>
       </header>
 
-      <section className="glass-card p-5 sm:p-6 space-y-4 overflow-hidden">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <section className="glass-card p-4 sm:p-5 space-y-3 overflow-hidden">
+        {card ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label>Anexos existentes</Label>
+              <span className="text-xs text-muted-foreground">{attachments.length}</span>
+            </div>
+
+            {attachments.length ? (
+              <div className="space-y-2">
+                {attachments.map((a) => (
+                  <div
+                    key={a.id}
+                    className="flex flex-col gap-2 rounded-lg border border-border/60 bg-secondary/20 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-foreground truncate">{a.fileName}</p>
+                        <Badge variant="secondary" className="shrink-0">
+                          {a.kind}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{a.mimeType}</p>
+                    </div>
+
+                    <Button variant="outline" size="sm" asChild>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void downloadAttachment(a).catch((err: unknown) => {
+                            const msg = err instanceof Error ? err.message : 'Erro ao baixar arquivo';
+                            alert(msg);
+                          });
+                        }}
+                      >
+                        Baixar
+                      </button>
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Nenhum anexo neste card.</p>
+            )}
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-2 min-w-0">
             <Label>Data</Label>
           <Input
@@ -175,20 +255,33 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
             </SelectContent>
           </Select>
           </div>
+
+          <div className="space-y-2 min-w-0 lg:col-span-2">
+            <Label>Cliente</Label>
+            <Input
+              value={formData.clientName}
+              onChange={(e) => setFormData(prev => ({ ...prev, clientName: e.target.value }))}
+              placeholder="Nome do cliente"
+              required
+            />
+          </div>
         </div>
 
         <div className="space-y-2 min-w-0">
-          <Label>Cliente</Label>
+          <Label>Número / WhatsApp</Label>
           <Input
-            value={formData.clientName}
-            onChange={(e) => setFormData(prev => ({ ...prev, clientName: e.target.value }))}
-            placeholder="Nome do cliente"
-            required
+            inputMode="tel"
+            value={formData.whatsapp}
+            onChange={(e) => setFormData((prev) => ({ ...prev, whatsapp: e.target.value }))}
+            placeholder="Ex: (11) 99999-9999"
           />
+          <p className="text-xs text-muted-foreground">
+            Esse número será usado no botão “Abrir” do Atendimento (link wa.me).
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2 min-w-0">
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          <div className="space-y-2 min-w-0 md:col-span-2 lg:col-span-2">
             <Label>Valor de Entrada (R$)</Label>
             <Input
               inputMode="decimal"
@@ -215,23 +308,141 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
             </div>
           </div>
 
-          <div className="space-y-2 min-w-0">
-            <Label>Categoria</Label>
-            <Select value={formData.category} onValueChange={(v) => setFormData((p) => ({ ...p, category: v }))}>
+          <div className="space-y-2 min-w-0 md:col-span-2 lg:col-span-2">
+            <Label>Já Recebido (R$)</Label>
+            <Input
+              inputMode="decimal"
+              placeholder="Ex: 30,00"
+              value={String(formData.receivedValue).replace('.', ',')}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const normalized = raw.replace(',', '.').replace(/[^0-9.]/g, '');
+                const n = Number(normalized);
+                setFormData((prev) => ({ ...prev, receivedValue: Number.isFinite(n) ? n : 0 }));
+              }}
+            />
+          </div>
+
+          <div className="space-y-2 min-w-0 md:col-span-1">
+            <Label>Quantidade</Label>
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              value={String(formData.quantity ?? 1)}
+              onChange={(e) => {
+                const n = Math.max(1, Math.floor(Number(e.target.value || 1)));
+                setFormData((prev) => ({ ...prev, quantity: Number.isFinite(n) ? n : 1 }));
+              }}
+            />
+          </div>
+
+          <div className="space-y-2 min-w-0 md:col-span-2 lg:col-span-3">
+            <Label>Produto</Label>
+            <Select
+              value={formData.productId}
+              onValueChange={(v) => {
+                const selected = products.find((prod) => prod.id === v);
+                setFormData((p) => {
+                  const shouldAutofillEntryValue = !card && (p.entryValue === 0 || p.entryValue === 0.0);
+                  const nextEntryValue =
+                    shouldAutofillEntryValue && selected && Number.isFinite(selected.price) && selected.price > 0
+                      ? selected.price
+                      : p.entryValue;
+
+                  return {
+                    ...p,
+                    productId: v,
+                    entryValue: nextEntryValue,
+                    // mantém category apenas como fallback para cards antigos
+                    category: p.category,
+                  };
+                });
+              }}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione" />
+                <SelectValue placeholder={products.length ? "Selecione" : "Cadastre produtos em Configurações"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="conteudo">Conteúdo</SelectItem>
-                <SelectItem value="trafego">Tráfego</SelectItem>
-                <SelectItem value="site">Site</SelectItem>
-                <SelectItem value="outros">Outros</SelectItem>
+                {products.map((prod) => (
+                  <SelectItem key={prod.id} value={prod.id}>
+                    {prod.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            {!products.length ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhum produto ativo encontrado. Vá em Configurações &gt; Produtos para cadastrar.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-2 min-w-0 md:col-span-4 lg:col-span-4">
+            <Label>Uploads (Imagem / Áudio)</Label>
+            <div className="rounded-lg border border-border/60 bg-secondary/10 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                />
+                <input
+                  ref={audioInputRef}
+                  type="file"
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => setOtherFile(e.target.files?.[0] ?? null)}
+                />
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-3 text-xs"
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  Imagem
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-3 text-xs"
+                  onClick={() => audioInputRef.current?.click()}
+                >
+                  Áudio
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-3 text-xs"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Arquivo
+                </Button>
+              </div>
+
+              <div className="mt-2 grid gap-1 text-[11px] text-muted-foreground">
+                {imageFile ? <p className="truncate">Imagem: {imageFile.name}</p> : null}
+                {audioFile ? <p className="truncate">Áudio: {audioFile.name}</p> : null}
+                {otherFile ? <p className="truncate">Arquivo: {otherFile.name}</p> : null}
+                {!imageFile && !audioFile && !otherFile ? <p>Nenhum arquivo selecionado.</p> : null}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-2 min-w-0">
             <Label>Atendente (Colaborador)</Label>
             <Select
@@ -249,9 +460,14 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
                 ))}
               </SelectContent>
             </Select>
+            {!hasSellerOptions ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhum vendedor encontrado. Cadastre em Equipe / Configurações e atribua o papel “Vendedor”.
+              </p>
+            ) : null}
           </div>
 
-          <div className="space-y-2 min-w-0">
+          <div className="space-y-2 min-w-0 lg:col-span-2">
             <Label>Produção (Responsável Técnico)</Label>
             <Select
               value={formData.productionResponsibleId}
@@ -268,7 +484,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
                 ))}
               </SelectContent>
             </Select>
-            {productionOptions.length === 0 ? (
+            {!hasProductionOptions ? (
               <p className="text-xs text-muted-foreground">
                 Nenhum colaborador de Produção encontrado (cadastre com função “Produção” em Configurações &gt; Colaboradores).
               </p>
@@ -276,7 +492,7 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-2 min-w-0">
             <Label>Prazo de Entrega</Label>
             <Input
@@ -285,69 +501,9 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
               onChange={(e) => setFormData(prev => ({ ...prev, deadline: e.target.value }))}
             />
           </div>
-
-          <div className="space-y-2 min-w-0">
-            <div className="flex items-center justify-between gap-3">
-              <Label>Uploads (Imagem / Áudio)</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowUploads((v) => !v)}
-              >
-                {showUploads ? 'Ocultar' : 'Adicionar'}
-              </Button>
-            </div>
-
-            {showUploads ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
-                <div className="space-y-2 min-w-0">
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                    className="min-w-0"
-                  />
-                  {imagePreviewUrl ? (
-                    <div className="rounded-lg border border-border/60 bg-secondary/20 p-2">
-                      <img
-                        src={imagePreviewUrl}
-                        alt="Prévia da imagem selecionada"
-                        className="h-24 w-full object-cover rounded-md"
-                        loading="lazy"
-                      />
-                      <p className="mt-2 text-xs text-muted-foreground truncate">{imageFile?.name}</p>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Sem imagem selecionada</p>
-                  )}
-                </div>
-
-                <div className="space-y-2 min-w-0">
-                  <Input
-                    type="file"
-                    accept="audio/*"
-                    onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
-                    className="min-w-0"
-                  />
-                  {audioFile ? (
-                    <div className="rounded-lg border border-border/60 bg-secondary/20 p-2">
-                      <audio controls className="w-full">
-                        {audioPreviewUrl ? <source src={audioPreviewUrl} /> : null}
-                      </audio>
-                      <p className="mt-2 text-xs text-muted-foreground truncate">{audioFile.name}</p>
-                      <p className="text-[11px] text-muted-foreground">(Arquivo não é salvo ainda)</p>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Sem áudio selecionado</p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">Clique em “Adicionar” para anexar arquivos.</p>
-            )}
-          </div>
         </div>
+
+        {/* Uploads selecionados via botões acima */}
 
         <div className="space-y-2 min-w-0">
           <Label>Observações</Label>
@@ -355,12 +511,12 @@ export function FlowCardForm({ card, onSubmit, onCancel }: FlowCardFormProps) {
             value={formData.notes}
             onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
             placeholder="Notas sobre o card..."
-            rows={3}
+            rows={2}
           />
         </div>
       </section>
 
-      <div className="flex justify-end gap-3 pt-4">
+      <div className="flex justify-end gap-3 pt-4 px-0 sm:px-0">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
