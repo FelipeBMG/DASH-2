@@ -24,8 +24,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserManagement } from "@/hooks/useUserManagement";
 import type { AppRole } from "@/lib/adminUsersApi";
 
-const OWNER_EMAIL = "adm@gmail.com";
-
 const createUserSchema = z
   .object({
     name: z.string().trim().min(2, "Informe o nome").max(80, "Nome muito longo"),
@@ -200,7 +198,6 @@ export function AdminUsersTab() {
     }
   };
 
-  const visibleUsers = users.filter((u) => (u.email ?? "").toLowerCase() !== OWNER_EMAIL);
   const myUserId = authUser?.id ?? null;
 
   return (
@@ -345,8 +342,8 @@ export function AdminUsersTab() {
 
           {!isLoading && !isError ? (
             <div className="space-y-2">
-              {visibleUsers.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum usuário ainda.</p> : null}
-              {visibleUsers.map((u) => {
+              {users.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum usuário ainda.</p> : null}
+              {users.map((u) => {
                 const isSelf = Boolean(myUserId && u.user_id === myUserId);
                 return (
                   <div key={u.user_id} className="rounded-lg border border-border/60 bg-secondary/20 px-3 py-2">

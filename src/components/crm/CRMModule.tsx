@@ -24,6 +24,7 @@ import { LeadForm } from './LeadForm';
 import { ClientForm } from './ClientForm';
 import type { Lead, Client } from '@/types/axion';
 import { cn } from '@/lib/utils';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
 type LeadStage = 'prospecting' | 'proposal' | 'won' | 'lost';
 
@@ -45,6 +46,12 @@ export function CRMModule() {
   const { leads, setLeads, clients, setClients, openModal } = useAxion();
   const [activeTab, setActiveTab] = useState('pipeline');
   const [draggedLead, setDraggedLead] = useState<Lead | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<
+    | { type: 'lead'; id: string }
+    | { type: 'client'; id: string }
+    | null
+  >(null);
 
   const handleDragStart = (lead: Lead) => {
     setDraggedLead(lead);
@@ -101,15 +108,13 @@ export function CRMModule() {
   };
 
   const handleDeleteLead = (leadId: string) => {
-    if (confirm('Tem certeza que deseja excluir este lead?')) {
-      setLeads(prev => prev.filter(l => l.id !== leadId));
-    }
+    setPendingDelete({ type: 'lead', id: leadId });
+    setDeleteDialogOpen(true);
   };
 
   const handleDeleteClient = (clientId: string) => {
-    if (confirm('Tem certeza que deseja excluir este cliente?')) {
-      setClients(prev => prev.filter(c => c.id !== clientId));
-    }
+    setPendingDelete({ type: 'client', id: clientId });
+    setDeleteDialogOpen(true);
   };
 
   const getLeadsByStage = (stage: LeadStage) => {
@@ -122,6 +127,28 @@ export function CRMModule() {
 
   return (
     <div className="h-full flex flex-col">
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setPendingDelete(null);
+        }}
+        title={pendingDelete?.type === 'client' ? 'Excluir cliente?' : 'Excluir lead?'}
+        description="Essa ação não pode ser desfeita."
+        cancelText="Cancelar"
+        confirmText="Excluir"
+        confirmVariant="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          if (pendingDelete.type === 'lead') {
+            setLeads((prev) => prev.filter((l) => l.id !== pendingDelete.id));
+          } else {
+            setClients((prev) => prev.filter((c) => c.id !== pendingDelete.id));
+          }
+          setDeleteDialogOpen(false);
+          setPendingDelete(null);
+        }}
+      />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-6">
           <TabsList className="bg-secondary">
@@ -349,3 +376,4 @@ export function CRMModule() {
     </div>
   );
 }
+

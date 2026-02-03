@@ -48,7 +48,7 @@ export function MetricCard({
       className="metric-card group"
     >
       <div className={cn(
-        "absolute inset-0 opacity-50 bg-gradient-to-br rounded-xl transition-opacity group-hover:opacity-70",
+        "pointer-events-none absolute inset-0 opacity-50 bg-gradient-to-br rounded-xl transition-opacity group-hover:opacity-70",
         variantStyles[variant]
       )} />
       

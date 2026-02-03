@@ -127,7 +127,7 @@
 
   .metric-card::before {
     content: '';
-    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    @apply pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300;
     background: var(--gradient-primary);
   }
 

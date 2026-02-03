@@ -8,6 +8,7 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
 import { downloadDriveFile } from "@/lib/driveDownload";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_LABEL: Record<string, string> = {
   leads: "Leads (Entrada)",
@@ -27,6 +28,7 @@ export function FlowCardViewer(props: {
   onEdit?: () => void;
 }) {
   const { session } = useAuth();
+  const { toast } = useToast();
 
   const handleDownload = useCallback(
     async (a: FlowCardAttachment) => {
@@ -142,7 +144,11 @@ export function FlowCardViewer(props: {
                   onClick={() => {
                     void handleDownload(a).catch((err: unknown) => {
                       const msg = err instanceof Error ? err.message : "Erro ao baixar arquivo";
-                      alert(msg);
+                      toast({
+                        title: "Falha no download",
+                        description: msg,
+                        variant: "destructive",
+                      });
                     });
                   }}
                 >
@@ -167,3 +173,4 @@ export function FlowCardViewer(props: {
     </div>
   );
 }
+

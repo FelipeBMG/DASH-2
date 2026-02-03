@@ -22,8 +22,15 @@ export function useSellerRankingLast30Days() {
       const id = c.attendantId || c.attendantName || "unknown";
       const name = c.attendantName || "—";
       const prev = bySeller.get(id) ?? { id, name, revenue: 0, dealsWon: 0 };
-      prev.revenue += Number(c.entryValue) || 0;
-      if (c.status === "concluido") prev.dealsWon += 1;
+
+      // Ranking: considera apenas o valor FINALIZADO e o volume de vendas (fechamentos).
+      // - volume: quantidade de cards concluídos
+      // - valor finalizado: soma do entryValue apenas quando concluído
+      if (c.status === "concluido") {
+        prev.dealsWon += 1;
+        prev.revenue += Number(c.entryValue) || 0;
+      }
+
       bySeller.set(id, prev);
     }
 

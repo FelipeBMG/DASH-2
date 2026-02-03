@@ -94,11 +94,7 @@ export function FluxoOperacoesModule() {
             createdByName,
           });
 
-          const uploadQueue = [
-            files.image ? { file: files.image } : null,
-            files.audio ? { file: files.audio } : null,
-            files.other ? { file: files.other } : null,
-          ].filter(Boolean) as Array<{ file: File }>;
+          const uploadQueue = [...files.images, ...files.audios, ...files.others].map((file) => ({ file }));
 
           for (const item of uploadQueue) {
             const uploaded = await uploadFlowCardFile({ flowCardId: created.id, file: item.file });
@@ -153,11 +149,7 @@ export function FluxoOperacoesModule() {
               action: 'updated',
             });
 
-            const uploadQueue = [
-              files.image ? { file: files.image } : null,
-              files.audio ? { file: files.audio } : null,
-              files.other ? { file: files.other } : null,
-            ].filter(Boolean) as Array<{ file: File }>;
+            const uploadQueue = [...files.images, ...files.audios, ...files.others].map((file) => ({ file }));
 
             for (const item of uploadQueue) {
               const uploaded = await uploadFlowCardFile({ flowCardId: card.id, file: item.file });

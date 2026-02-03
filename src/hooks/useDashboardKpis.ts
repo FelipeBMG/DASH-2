@@ -26,6 +26,20 @@ function includesTrafficCategory(category: string) {
   return cat.includes("tráfego") || cat.includes("trafego") || cat.includes("ads");
 }
 
+function daysBetweenInclusive(startISO: string, endISO: string) {
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  const ms = end.getTime() - start.getTime();
+  return Math.max(1, Math.floor(ms / (1000 * 60 * 60 * 24)) + 1);
+}
+
+function daysInMonthForISO(isoDate: string) {
+  const d = new Date(isoDate);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  return new Date(year, month + 1, 0).getDate();
+}
+
 export function useDashboardKpis(dateRange: { start: string; end: string }): DashboardKpis {
   const { data: flowCards = [] } = useFlowCards();
   const { data: transactions = [] } = useFinancialTransactions();
@@ -65,10 +79,25 @@ export function useDashboardKpis(dateRange: { start: string; end: string }): Das
       )
       .reduce((sum, t) => sum + (Number(t.value) || 0), 0);
 
-    // Custos fixos: collaborator_settings.commission_fixed (custo fixo mensal)
-    const teamCosts = collaborators.reduce((sum, c) => sum + (Number(c.commissionFixed) || 0), 0);
+    // Custos fixos (equipe): rateado pelo período (igual no relatório)
+    const days = daysBetweenInclusive(dateRange.start, dateRange.end);
+    const monthDays = daysInMonthForISO(dateRange.start);
+    const prorationFactor = monthDays > 0 ? Math.min(1, days / monthDays) : 1;
+    const fixedCost =
+      collaborators.reduce((sum, c) => sum + (Number(c.commissionFixed) || 0), 0) * prorationFactor;
 
-    const operationalCost = transactionExpenses + teamCosts;
+    // Comissões (variável): % * valor de cards concluídos no período (igual no relatório)
+    const finalizedCardsInRange = flowCards.filter(
+      (c) => c.status === "concluido" && withinRange((c.updatedAt || "").slice(0, 10), dateRange.start, dateRange.end),
+    );
+    const commissionPaid = finalizedCardsInRange.reduce((sum, c) => {
+      const sellerId = c.attendantId;
+      const percent = Number(collaborators.find((col) => col.user_id === sellerId)?.commissionPercent ?? 0);
+      return sum + (Number(c.entryValue) || 0) * (percent / 100);
+    }, 0);
+
+    // Custo operacional (sem imposto): despesas + fixos rateados + comissões
+    const operationalCost = transactionExpenses + fixedCost + commissionPaid;
 
     const activeProjects = flowCards.filter((c) => c.status !== "concluido").length;
 
@@ -82,10 +111,8 @@ export function useDashboardKpis(dateRange: { start: string; end: string }): Das
     ).length;
     const conversionRate = totalLeadsFromCards > 0 ? (convertedCards / totalLeadsFromCards) * 100 : 0;
 
-    const totalFlowRevenueAllTime = flowCards
-      .filter((c) => c.status === "em_producao" || c.status === "concluido")
-      .reduce((sum, c) => sum + (Number(c.entryValue) || 0), 0);
-    const trafficROI = trafficCosts > 0 ? ((totalFlowRevenueAllTime - trafficCosts) / trafficCosts) * 100 : 0;
+    // ROI de tráfego: no mesmo período (para bater com o dashboard/relatórios)
+    const trafficROI = trafficCosts > 0 ? ((flowRevenue - trafficCosts) / trafficCosts) * 100 : 0;
 
     const taxAmount = revenue * (taxRate / 100);
     const netProfit = revenue - operationalCost - taxAmount;

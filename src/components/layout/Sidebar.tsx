@@ -7,6 +7,7 @@ import {
   UserCog, 
   FileText, 
   Settings,
+  ShoppingCart,
   ChevronLeft,
   Megaphone,
   Workflow
@@ -26,6 +27,7 @@ const menuItems: { id: ModuleName; label: string; icon: typeof LayoutDashboard }
   { id: 'calendar', label: 'Calendário', icon: Calendar },
   { id: 'team', label: 'Equipe', icon: UserCog },
   { id: 'contracts', label: 'Contratos', icon: FileText },
+  { id: 'sales', label: 'Vendas', icon: ShoppingCart },
   { id: 'settings', label: 'Configurações', icon: Settings },
 ];
 
@@ -53,7 +55,7 @@ export function Sidebar() {
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       className={cn(
-        "h-screen flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300",
+        "hidden md:flex h-screen flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300",
         collapsed ? "w-20" : "w-64"
       )}
     >

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
-  Plus, 
   TrendingUp, 
   TrendingDown,
   DollarSign,
@@ -22,6 +21,11 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import type { Project, Transaction } from '@/types/axion';
+import { useFinancialTransactions } from '@/hooks/useFinancialTransactions';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -31,8 +35,13 @@ const formatCurrency = (value: number) => {
 };
 
 export function FinancialModule() {
-  const { transactions, setTransactions, projects, openModal, metrics } = useAxion();
+  const { projects, openModal } = useAxion();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data: financialTx = [], isLoading, error } = useFinancialTransactions();
   const [activeTab, setActiveTab] = useState('overview');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pendingDeleteTxId, setPendingDeleteTxId] = useState<string | null>(null);
 
   const handleNewTransaction = (type: 'income' | 'expense') => {
     openModal(<TransactionForm defaultType={type} />);
@@ -42,14 +51,46 @@ export function FinancialModule() {
     openModal(<TransactionForm transaction={transaction} />);
   };
 
-  const handleDeleteTransaction = (transactionId: string) => {
-    if (confirm('Tem certeza que deseja excluir esta transação?')) {
-      setTransactions(prev => prev.filter(t => t.id !== transactionId));
-    }
+  const performDeleteTransaction = (transactionId: string) => {
+    void (async () => {
+      const { error } = await supabase
+        .from('financial_transactions')
+        .delete()
+        .eq('id', transactionId);
+
+      if (error) {
+        console.error('[FinancialModule] delete financial_transactions failed:', error);
+        toast({
+          title: 'Não foi possível excluir a transação',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      void qc.invalidateQueries({ queryKey: ['financial_transactions'] });
+    })();
   };
 
-  const incomeTransactions = transactions.filter(t => t.type === 'income');
-  const expenseTransactions = transactions.filter(t => t.type === 'expense');
+  const handleDeleteTransaction = (transactionId: string) => {
+    setPendingDeleteTxId(transactionId);
+    setDeleteDialogOpen(true);
+  };
+
+  const transactions: Transaction[] = financialTx.map((t) => ({
+    id: t.id,
+    type: t.type,
+    category: t.category,
+    description: t.description,
+    value: Number(t.value) || 0,
+    date: t.date,
+    projectId: undefined,
+    receivedValue: Number(t.receivedValue ?? t.value) || 0,
+    pendingValue: Number(t.pendingValue) || 0,
+  }));
+
+  const incomeTransactions = transactions.filter((t) => t.type === 'income');
+  const expenseTransactions = transactions.filter((t) => t.type === 'expense');
   
   const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.value, 0);
   const totalExpenses = expenseTransactions.reduce((sum, t) => sum + t.value, 0);
@@ -69,6 +110,25 @@ export function FinancialModule() {
 
   return (
     <div className="h-full flex flex-col">
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setPendingDeleteTxId(null);
+        }}
+        title="Excluir transação?"
+        description="Essa ação não pode ser desfeita."
+        cancelText="Cancelar"
+        confirmText="Excluir"
+        confirmVariant="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onConfirm={() => {
+          if (!pendingDeleteTxId) return;
+          const id = pendingDeleteTxId;
+          setDeleteDialogOpen(false);
+          setPendingDeleteTxId(null);
+          performDeleteTransaction(id);
+        }}
+      />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-6">
           <TabsList className="bg-secondary">
@@ -98,6 +158,15 @@ export function FinancialModule() {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="flex-1 mt-0">
+          {error ? (
+            <div className="glass-card p-6 mb-6">
+              <p className="text-sm text-destructive">Erro ao carregar transações do Supabase.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {error instanceof Error ? error.message : 'Tente novamente.'}
+              </p>
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -223,7 +292,11 @@ export function FinancialModule() {
             >
               <h3 className="text-lg font-semibold text-foreground mb-4">Últimas Transações</h3>
               
-              {transactions.length === 0 ? (
+              {isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>Carregando transações…</p>
+                </div>
+              ) : transactions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <DollarSign className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p>Nenhuma transação registrada</p>
@@ -249,6 +322,11 @@ export function FinancialModule() {
                         <div>
                           <p className="font-medium text-foreground">{transaction.description}</p>
                           <p className="text-xs text-muted-foreground">{transaction.category}</p>
+                          {transaction.type === 'income' && (transaction.pendingValue ?? 0) > 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              A receber: {formatCurrency(transaction.pendingValue ?? 0)}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -295,7 +373,11 @@ export function FinancialModule() {
           <div className="glass-card p-6">
             <h3 className="text-lg font-semibold text-foreground mb-4">Extrato Completo</h3>
             
-            {transactions.length === 0 ? (
+            {isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p>Carregando extrato…</p>
+              </div>
+            ) : transactions.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <DollarSign className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>Nenhuma transação registrada</p>
@@ -326,6 +408,11 @@ export function FinancialModule() {
                           <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                             {transaction.category}
                           </span>
+                          {transaction.type === 'income' && (transaction.pendingValue ?? 0) > 0 ? (
+                            <span className="text-xs text-muted-foreground">
+                              A receber: {formatCurrency(transaction.pendingValue ?? 0)}
+                            </span>
+                          ) : null}
                           <span className="text-xs text-muted-foreground">
                             {format(parseISO(transaction.date), "dd 'de' MMMM", { locale: ptBR })}
                           </span>
@@ -399,6 +486,7 @@ export function FinancialModule() {
   );
 }
 
+
 // Componente para cada projeto a receber com opção de marcar como recebido
 function ReceivableCard({ 
   project, 
@@ -409,7 +497,9 @@ function ReceivableCard({
   pending: number; 
   progress: number; 
 }) {
-  const { setProjects, setTransactions } = useAxion();
+  const { setProjects } = useAxion();
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [customValue, setCustomValue] = useState('');
 
@@ -434,16 +524,40 @@ function ReceivableCard({
       return p;
     }));
 
-    // Cria transação de entrada
-    setTransactions(prev => [...prev, {
-      id: crypto.randomUUID(),
-      type: 'income',
-      category: 'Recebimento de Projeto',
-      description: `Pagamento: ${project.title}`,
-      value: amount,
-      date: new Date().toISOString().split('T')[0],
-      projectId: project.id,
-    }]);
+    // Cria transação de entrada no Supabase (fonte da verdade)
+    void (async () => {
+      const txId = crypto.randomUUID();
+      const txDate = new Date().toISOString().split('T')[0];
+
+      const { error } = await supabase
+        .from('financial_transactions')
+        .upsert(
+          {
+            id: txId,
+            type: 'income',
+            category: 'Recebimento de Projeto',
+            cost_center: 'Geral',
+            description: `Pagamento: ${project.title}`,
+            value: Number(amount) || 0,
+            received_value: Number(amount) || 0,
+            pending_value: 0,
+            date: txDate,
+          },
+          { onConflict: 'id' },
+        );
+
+      if (error) {
+        console.error('[ReceivableCard] upsert financial_transactions failed:', error);
+        toast({
+          title: 'Não foi possível registrar o recebimento',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      void qc.invalidateQueries({ queryKey: ['financial_transactions'] });
+    })();
 
     setIsEditing(false);
     setCustomValue('');

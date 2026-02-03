@@ -98,7 +98,7 @@ export function VendedorCalendarPanel() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-foreground capitalize">{format(currentDate, "MMMM yyyy", { locale: ptBR })}</h2>
+            <h2 className="text-xl font-bold text-foreground capitalize">{format(currentDate, "MMMM yyyy", { locale: ptBR })}</h2>
             <p className="text-muted-foreground">Agendamentos e prazos</p>
           </div>
           <div className="flex gap-2">
@@ -111,16 +111,16 @@ export function VendedorCalendarPanel() {
           </div>
         </div>
 
-        <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
-          <div className="grid grid-cols-7 gap-2 mb-4">
+        <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-4">
+          <div className="grid grid-cols-7 gap-1.5 mb-3">
             {weekDays.map((day) => (
-              <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
+              <div key={day} className="text-center text-xs font-medium text-muted-foreground py-1.5">
                 {day}
               </div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1.5">
             {paddingDays.map((_, index) => (
               <div key={`padding-${index}`} className="aspect-square" />
             ))}
@@ -133,13 +133,13 @@ export function VendedorCalendarPanel() {
                 <div
                   key={day.toISOString()}
                   className={cn(
-                    "aspect-square p-2 rounded-lg border transition-all cursor-pointer",
+                    "aspect-square p-1.5 rounded-md border transition-all cursor-pointer",
                     isToday(day) ? "bg-primary/20 border-primary" : "border-border hover:border-primary/50 hover:bg-secondary/50",
                     !isSameMonth(day, currentDate) && "opacity-30",
                   )}
                 >
                   <div className="flex flex-col h-full">
-                    <span className={cn("text-sm font-medium", isToday(day) ? "text-primary" : "text-foreground")}>
+                    <span className={cn("text-xs font-medium", isToday(day) ? "text-primary" : "text-foreground")}>
                       {format(day, "d")}
                     </span>
 
@@ -150,7 +150,7 @@ export function VendedorCalendarPanel() {
                           return (
                             <div
                               key={event.id}
-                              className={cn("flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] truncate", className)}
+                              className={cn("flex items-center gap-1 px-1 py-0.5 rounded text-[9px] truncate", className)}
                             >
                               <Icon className="w-2.5 h-2.5 flex-shrink-0" />
                               <span className="truncate">{event.title}</span>

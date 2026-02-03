@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronLeft, Calendar, Settings, Headset, Workflow } from "lucide-react";
+import { ChevronLeft, Calendar, Settings, Headset, Workflow, ShoppingCart } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { VendedorSection } from "@/components/vendedor/types";
@@ -9,6 +9,7 @@ import { BrandMark } from "@/components/common/BrandMark";
 const items: { id: VendedorSection; label: string; icon: typeof Headset }[] = [
   { id: "atendimento", label: "Atendimento", icon: Headset },
   { id: "fluxo", label: "Fluxo de Operações", icon: Workflow },
+  { id: "sales", label: "Vendas", icon: ShoppingCart },
   { id: "calendar", label: "Calendário", icon: Calendar },
   { id: "settings", label: "Configurações", icon: Settings },
 ];
@@ -26,7 +27,7 @@ export function VendedorSidebar({ activeSection, onChangeSection }: Props) {
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       className={cn(
-        "h-screen flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300",
+        "hidden md:flex h-screen flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-300",
         collapsed ? "w-20" : "w-64",
       )}
     >

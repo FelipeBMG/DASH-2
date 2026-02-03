@@ -19,9 +19,11 @@ export function SettingsModule() {
             </TabsTrigger>
 
             {isAdmin ? (
-              <TabsTrigger value="produtos" className="rounded-full px-4">
-                Produtos
-              </TabsTrigger>
+              <>
+                <TabsTrigger value="produtos" className="rounded-full px-4">
+                  Produtos
+                </TabsTrigger>
+              </>
             ) : null}
           </TabsList>
         </div>
@@ -31,9 +33,11 @@ export function SettingsModule() {
         </TabsContent>
 
         {isAdmin ? (
-          <TabsContent value="produtos">
-            <AdminProductsTab />
-          </TabsContent>
+          <>
+            <TabsContent value="produtos">
+              <AdminProductsTab />
+            </TabsContent>
+          </>
         ) : null}
       </Tabs>
     </div>

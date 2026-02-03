@@ -259,6 +259,8 @@ export type Database = {
           date: string
           description: string
           id: string
+          pending_value: number
+          received_value: number
           type: string
           updated_at: string
           value: number
@@ -270,6 +272,8 @@ export type Database = {
           date: string
           description?: string
           id?: string
+          pending_value?: number
+          received_value?: number
           type: string
           updated_at?: string
           value?: number
@@ -281,6 +285,8 @@ export type Database = {
           date?: string
           description?: string
           id?: string
+          pending_value?: number
+          received_value?: number
           type?: string
           updated_at?: string
           value?: number
@@ -346,6 +352,7 @@ export type Database = {
           id: string
           leads_count: number
           notes: string | null
+          payment_method: string
           product_id: string | null
           production_responsible_id: string | null
           production_responsible_name: string | null
@@ -369,6 +376,7 @@ export type Database = {
           id?: string
           leads_count?: number
           notes?: string | null
+          payment_method?: string
           product_id?: string | null
           production_responsible_id?: string | null
           production_responsible_name?: string | null
@@ -392,6 +400,7 @@ export type Database = {
           id?: string
           leads_count?: number
           notes?: string | null
+          payment_method?: string
           product_id?: string | null
           production_responsible_id?: string | null
           production_responsible_name?: string | null

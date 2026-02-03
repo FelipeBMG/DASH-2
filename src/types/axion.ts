@@ -82,6 +82,10 @@ export interface Transaction {
   value: number;
   date: string;
   projectId?: string;
+  /** Para entradas: valor efetivamente recebido (espelha o que vai em `value` no Supabase). */
+  receivedValue?: number;
+  /** Para entradas: valor pendente a receber. */
+  pendingValue?: number;
 }
 
 export interface CalendarEvent {
@@ -150,6 +154,7 @@ export interface FlowCard {
   quantity: number;
   entryValue: number;
   receivedValue: number;
+  paymentMethod?: string;
   productId?: string;
   productName?: string;
   category?: string;
@@ -162,6 +167,8 @@ export interface FlowCard {
   productionResponsibleName: string;
   deadline?: string;
   notes?: string;
+  /** Horário local da venda (HH:mm) usado para ajustar o created_at no banco. */
+  occurredAtTime?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -190,4 +197,5 @@ export type ModuleName =
   | 'calendar'
   | 'team'
   | 'contracts'
+  | 'sales'
   | 'settings';

@@ -11,16 +11,21 @@ import type { TrafficEntry } from '@/types/axion';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
+import { useFinancialTransactions } from '@/hooks/useFinancialTransactions';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
 const META_TAX_RATE = 12.5;
 
 export function TrafficModule() {
-  const { trafficEntries, setTrafficEntries, settings } = useAxion();
+  const { settings } = useAxion();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { data: financialTx = [] } = useFinancialTransactions();
   const [showForm, setShowForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TrafficEntry | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     value: '',
@@ -51,6 +56,41 @@ export function TrafficModule() {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     return (value: string) => uuidRe.test(value);
   }, []);
+
+  const trafficEntries = useMemo<TrafficEntry[]>(() => {
+    const trafficTx = financialTx.filter((t) => {
+      if (t.type !== 'expense') return false;
+      const cat = (t.category || '').toLowerCase();
+      return cat.includes('tráfego') || cat.includes('trafego') || cat.includes('ads');
+    });
+
+    const parseLeadsConversions = (description: string) => {
+      // Esperado: "Meta Ads — 10 leads / 2 conv"
+      const m = (description || '').match(/(\d+)\s*leads?\s*\/\s*(\d+)\s*conv/i);
+      if (!m) return { leads: 0, conversions: 0 };
+      return { leads: Number(m[1]) || 0, conversions: Number(m[2]) || 0 };
+    };
+
+    return trafficTx
+      .map((t) => {
+        const totalWithTax = Number(t.value) || 0;
+        const baseValue = totalWithTax / (1 + META_TAX_RATE / 100);
+        const taxValue = totalWithTax - baseValue;
+        const { leads, conversions } = parseLeadsConversions(t.description);
+        return {
+          id: t.id,
+          date: t.date,
+          value: baseValue,
+          leads,
+          conversions,
+          taxRate: META_TAX_RATE,
+          taxValue,
+          totalWithTax,
+          createdAt: t.createdAt,
+        } as TrafficEntry;
+      })
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+  }, [financialTx]);
 
   const getUuid = useMemo(() => {
     // crypto.randomUUID pode falhar em alguns navegadores/ambientes.
@@ -98,12 +138,6 @@ export function TrafficModule() {
       totalWithTax: value + taxValue,
       createdAt: editingEntry?.createdAt || new Date().toISOString(),
     };
-
-    if (editingEntry) {
-      setTrafficEntries(prev => prev.map(e => e.id === editingEntry.id ? entryData : e));
-    } else {
-      setTrafficEntries(prev => [entryData, ...prev]);
-    }
 
     // Persistir o gasto no financeiro (fonte única para o Dashboard)
     // - value: total com imposto (Meta) para refletir o custo real
@@ -176,10 +210,35 @@ export function TrafficModule() {
     setShowForm(true);
   };
 
+  const performDelete = (id: string) => {
+    void (async () => {
+      try {
+        const { error } = await supabase.from('financial_transactions').delete().eq('id', id);
+        if (error) {
+          console.error('[TrafficModule] delete financial_transactions failed:', error);
+          toast({
+            title: 'Não foi possível excluir',
+            description: error.message,
+            variant: 'destructive',
+          });
+          return;
+        }
+        void qc.invalidateQueries({ queryKey: ['financial_transactions'] });
+        toast({ title: 'Lançamento excluído' });
+      } catch (err) {
+        console.error('[TrafficModule] unexpected error deleting financial_transactions:', err);
+        toast({
+          title: 'Erro inesperado ao excluir',
+          description: err instanceof Error ? err.message : 'Tente novamente.',
+          variant: 'destructive',
+        });
+      }
+    })();
+  };
+
   const handleDelete = (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este lançamento?')) {
-      setTrafficEntries(prev => prev.filter(entry => entry.id !== id));
-    }
+    setPendingDeleteId(id);
+    setDeleteDialogOpen(true);
   };
 
   // Calculate totals
@@ -199,6 +258,25 @@ export function TrafficModule() {
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setPendingDeleteId(null);
+        }}
+        title="Excluir lançamento?"
+        description="Essa ação não pode ser desfeita."
+        cancelText="Cancelar"
+        confirmText="Excluir"
+        confirmVariant="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onConfirm={() => {
+          if (!pendingDeleteId) return;
+          const id = pendingDeleteId;
+          setDeleteDialogOpen(false);
+          setPendingDeleteId(null);
+          performDelete(id);
+        }}
+      />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -471,3 +549,4 @@ export function TrafficModule() {
     </div>
   );
 }
+

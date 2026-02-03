@@ -1,12 +1,16 @@
 import { motion } from 'framer-motion';
 import { 
   FileText, 
-  Download,
   Printer
 } from 'lucide-react';
 import { useAxion } from '@/contexts/AxionContext';
 import { Button } from '@/components/ui/button';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { useFlowCards } from '@/hooks/useFlowCards';
+import { useFinancialTransactions } from '@/hooks/useFinancialTransactions';
+import { useAppSettings } from '@/hooks/useAppSettings';
+import { useCollaboratorsAdmin } from '@/hooks/useCollaboratorsAdmin';
+import { exportDreAsPrintablePdf } from '@/lib/dreExport';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -15,24 +19,122 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-const COLORS = ['hsl(174, 72%, 50%)', 'hsl(142, 72%, 45%)', 'hsl(38, 92%, 50%)', 'hsl(0, 72%, 51%)', 'hsl(217, 91%, 60%)'];
+function withinRange(isoDate: string, start: string, end: string) {
+  // ISO yyyy-mm-dd string compare works lexicographically.
+  return isoDate >= start && isoDate <= end;
+}
+
+function daysBetweenInclusive(startISO: string, endISO: string) {
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  const ms = end.getTime() - start.getTime();
+  return Math.max(1, Math.floor(ms / (1000 * 60 * 60 * 24)) + 1);
+}
+
+function daysInMonthForISO(isoDate: string) {
+  const d = new Date(isoDate);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  return new Date(year, month + 1, 0).getDate();
+}
+
+const CHART_COLORS = [
+  'hsl(var(--primary))',
+  'hsl(var(--success))',
+  'hsl(var(--warning))',
+  'hsl(var(--destructive))',
+  'hsl(var(--info))',
+];
+
+function renderPieLabel(props: { cx?: number; cy?: number; midAngle?: number; innerRadius?: number; outerRadius?: number; percent?: number; name?: string }) {
+  const { cx = 0, cy = 0, midAngle = 0, innerRadius = 0, outerRadius = 0, percent = 0, name = '' } = props;
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.6;
+  const RADIAN = Math.PI / 180;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  if (percent <= 0.04) return null; // evita texto espremido
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill={'hsl(var(--foreground))'}
+      textAnchor={x > cx ? 'start' : 'end'}
+      dominantBaseline="central"
+      fontSize={12}
+    >
+      {`${name} (${Math.round(percent * 100)}%)`}
+    </text>
+  );
+}
 
 export function ReportsModule() {
-  const { transactions, metrics, projects, settings } = useAxion();
+  const { dateRange } = useAxion();
+  const { data: flowCards = [] } = useFlowCards();
+  const { data: financialTx = [] } = useFinancialTransactions();
+  const { data: appSettings } = useAppSettings();
+  const { data: collaborators = [] } = useCollaboratorsAdmin();
 
-  const incomeTransactions = transactions.filter(t => t.type === 'income');
-  const expenseTransactions = transactions.filter(t => t.type === 'expense');
-  
-  const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.value, 0);
-  const totalExpenses = expenseTransactions.reduce((sum, t) => sum + t.value, 0);
-  const taxAmount = totalIncome * (settings.taxRate / 100);
-  const netProfit = totalIncome - totalExpenses - taxAmount;
+  const companyName = appSettings?.companyName ?? 'Empresa';
+  const taxRate = appSettings?.taxRate ?? 15;
+
+  // Receita (serviços): Flow Cards em produção + concluído, no período (comparando updatedAt)
+  const serviceRevenue = flowCards
+    .filter(
+      (c) =>
+        (c.status === 'em_producao' || c.status === 'concluido') &&
+        withinRange((c.updatedAt || '').slice(0, 10), dateRange.start, dateRange.end),
+    )
+    .reduce((sum, c) => sum + (Number(c.entryValue) || 0), 0);
+
+  // Entradas/Saídas (Financeiro): no período
+  const incomeTransactions = financialTx
+    .filter((t) => t.type === 'income' && withinRange(t.date, dateRange.start, dateRange.end));
+  const expenseTransactions = financialTx
+    .filter((t) => t.type === 'expense' && withinRange(t.date, dateRange.start, dateRange.end));
+
+  const totalIncomeTransactions = incomeTransactions.reduce((sum, t) => sum + (Number(t.value) || 0), 0);
+  const totalExpenseTransactions = expenseTransactions.reduce((sum, t) => sum + (Number(t.value) || 0), 0);
+
+  // Receita Bruta total (serviços + outras entradas)
+  const totalIncome = serviceRevenue + totalIncomeTransactions;
+
+  // Impostos sobre a receita
+  const taxAmount = totalIncome * (taxRate / 100);
+
+  // Fixos (equipe): rateado por período
+  const days = daysBetweenInclusive(dateRange.start, dateRange.end);
+  const monthDays = daysInMonthForISO(dateRange.start);
+  const prorationFactor = monthDays > 0 ? Math.min(1, days / monthDays) : 1;
+  const fixedCost = collaborators.reduce((sum, c) => sum + (Number(c.commissionFixed) || 0), 0) * prorationFactor;
+
+  // Comissões pagas (variável): % * valor finalizado (somente cards concluídos) no período
+  const finalizedCardsInRange = flowCards.filter(
+    (c) => c.status === 'concluido' && withinRange((c.updatedAt || '').slice(0, 10), dateRange.start, dateRange.end),
+  );
+  const commissionPaid = finalizedCardsInRange.reduce((sum, c) => {
+    const sellerId = c.attendantId;
+    const percent = Number(collaborators.find((col) => col.user_id === sellerId)?.commissionPercent ?? 0);
+    return sum + (Number(c.entryValue) || 0) * (percent / 100);
+  }, 0);
+
+  // Despesas operacionais (sem imposto): saídas do financeiro + fixos rateados + comissões
+  const operationalExpenses = totalExpenseTransactions + fixedCost + commissionPaid;
+  const totalExpenses = operationalExpenses + taxAmount;
+  const netProfit = totalIncome - operationalExpenses - taxAmount;
 
   // Group expenses by category for pie chart
   const expensesByCategory = expenseTransactions.reduce((acc, t) => {
-    acc[t.category] = (acc[t.category] || 0) + t.value;
+    const key = (t.category || 'Outros').trim() || 'Outros';
+    acc[key] = (acc[key] || 0) + (Number(t.value) || 0);
     return acc;
   }, {} as Record<string, number>);
+
+  // Itens que não vêm como transação (e para manter a visualização completa): impostos, fixos e comissão
+  if (taxAmount > 0) expensesByCategory['Impostos'] = (expensesByCategory['Impostos'] || 0) + taxAmount;
+  if (fixedCost > 0) expensesByCategory['Fixos (equipe)'] = (expensesByCategory['Fixos (equipe)'] || 0) + fixedCost;
+  if (commissionPaid > 0) expensesByCategory['Comissões (variável)'] = (expensesByCategory['Comissões (variável)'] || 0) + commissionPaid;
 
   const pieData = Object.entries(expensesByCategory).map(([name, value]) => ({
     name,
@@ -41,14 +143,31 @@ export function ReportsModule() {
 
   // Monthly data for bar chart
   const barData = [
-    { name: 'Faturamento', value: totalIncome, fill: 'hsl(142, 72%, 45%)' },
-    { name: 'Despesas', value: totalExpenses, fill: 'hsl(0, 72%, 51%)' },
-    { name: 'Impostos', value: taxAmount, fill: 'hsl(38, 92%, 50%)' },
-    { name: 'Lucro Líquido', value: Math.max(0, netProfit), fill: 'hsl(174, 72%, 50%)' },
+    { name: 'Receitas', value: totalIncome, fill: 'hsl(var(--success))' },
+    { name: 'Despesas (operacionais)', value: operationalExpenses, fill: 'hsl(var(--destructive))' },
+    { name: 'Impostos', value: taxAmount, fill: 'hsl(var(--warning))' },
+    { name: 'Lucro Líquido', value: netProfit, fill: 'hsl(var(--primary))' },
   ];
 
-  const handlePrint = () => {
-    window.print();
+  const handleExportDre = () => {
+    const periodLabel = `Período: ${dateRange.start} a ${dateRange.end}`;
+    exportDreAsPrintablePdf({
+      title: `DRE — ${companyName}`,
+      subtitle: 'Demonstrativo de Resultados (DRE)',
+      periodLabel,
+      fileName: `DRE-${companyName}-${dateRange.start}-${dateRange.end}`,
+      rows: [
+        { label: 'Receita Bruta', value: formatCurrency(totalIncome) },
+        { label: '(-) Despesas Operacionais', value: formatCurrency(operationalExpenses), tone: 'destructive' },
+        { label: `(-) Impostos (${taxRate}%)`, value: formatCurrency(taxAmount), tone: 'warning' },
+        { label: 'Lucro Líquido', value: formatCurrency(netProfit), tone: netProfit >= 0 ? 'success' : 'destructive' },
+        { label: 'Receita (serviços)', value: formatCurrency(serviceRevenue), tone: 'muted' },
+        { label: 'Fixos (equipe) — rateado', value: formatCurrency(fixedCost), tone: 'muted' },
+        { label: 'Comissões (variável)', value: formatCurrency(commissionPaid), tone: 'muted' },
+        { label: 'Entradas (financeiro)', value: formatCurrency(totalIncomeTransactions), tone: 'muted' },
+        { label: 'Saídas (financeiro)', value: formatCurrency(totalExpenseTransactions), tone: 'muted' },
+      ],
+    });
   };
 
   return (
@@ -60,9 +179,9 @@ export function ReportsModule() {
           <p className="text-muted-foreground">Demonstrativo de Resultados (DRE)</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handlePrint} className="gap-2">
+          <Button variant="outline" onClick={handleExportDre} className="gap-2">
             <Printer className="w-4 h-4" />
-            Imprimir
+            Exportar DRE
           </Button>
         </div>
       </div>
@@ -75,7 +194,7 @@ export function ReportsModule() {
       >
         <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
           <FileText className="w-5 h-5 text-primary" />
-          DRE - {settings.companyName}
+          DRE - {companyName}
         </h3>
         
         <div className="space-y-3">
@@ -85,10 +204,10 @@ export function ReportsModule() {
           </div>
           <div className="flex justify-between items-center py-3 border-b border-border">
             <span className="text-muted-foreground">(-) Despesas Operacionais</span>
-            <span className="text-destructive">{formatCurrency(totalExpenses)}</span>
+            <span className="text-destructive">{formatCurrency(operationalExpenses)}</span>
           </div>
           <div className="flex justify-between items-center py-3 border-b border-border">
-            <span className="text-muted-foreground">(-) Impostos ({settings.taxRate}%)</span>
+            <span className="text-muted-foreground">(-) Impostos ({taxRate}%)</span>
             <span className="text-warning">{formatCurrency(taxAmount)}</span>
           </div>
           <div className="flex justify-between items-center py-3 bg-primary/10 rounded-lg px-4 -mx-4">
@@ -96,6 +215,21 @@ export function ReportsModule() {
             <span className={`font-bold text-xl ${netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
               {formatCurrency(netProfit)}
             </span>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-lg border border-border bg-secondary/40 p-4">
+            <p className="text-xs text-muted-foreground">Receita (serviços)</p>
+            <p className="text-lg font-semibold text-foreground">{formatCurrency(serviceRevenue)}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-secondary/40 p-4">
+            <p className="text-xs text-muted-foreground">Fixos (equipe) — rateado</p>
+            <p className="text-lg font-semibold text-foreground">{formatCurrency(fixedCost)}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-secondary/40 p-4">
+            <p className="text-xs text-muted-foreground">Comissões (variável)</p>
+            <p className="text-lg font-semibold text-foreground">{formatCurrency(commissionPaid)}</p>
           </div>
         </div>
       </motion.div>
@@ -122,20 +256,22 @@ export function ReportsModule() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                  label={renderPieLabel as never}
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="value"
                 >
                   {pieData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip 
                   formatter={(value: number) => formatCurrency(value)}
+                  labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  itemStyle={{ color: 'hsl(var(--foreground))' }}
                   contentStyle={{ 
-                    backgroundColor: 'hsl(222 47% 10%)', 
-                    border: '1px solid hsl(222 30% 16%)',
+                    backgroundColor: 'hsl(var(--popover))', 
+                    border: '1px solid hsl(var(--border))',
                     borderRadius: '8px'
                   }}
                 />
@@ -154,22 +290,25 @@ export function ReportsModule() {
           
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={barData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis 
                 dataKey="name" 
-                stroke="hsl(215 20% 55%)"
-                tick={{ fill: 'hsl(215 20% 55%)', fontSize: 12 }}
+                stroke="hsl(var(--muted-foreground))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
               />
               <YAxis 
-                stroke="hsl(215 20% 55%)"
-                tick={{ fill: 'hsl(215 20% 55%)', fontSize: 12 }}
+                stroke="hsl(var(--muted-foreground))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                 tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`}
               />
               <Tooltip 
                 formatter={(value: number) => formatCurrency(value)}
+                cursor={false}
+                labelStyle={{ color: 'hsl(var(--foreground))' }}
+                itemStyle={{ color: 'hsl(var(--foreground))' }}
                 contentStyle={{ 
-                  backgroundColor: 'hsl(222 47% 10%)', 
-                  border: '1px solid hsl(222 30% 16%)',
+                  backgroundColor: 'hsl(var(--popover))', 
+                  border: '1px solid hsl(var(--border))',
                   borderRadius: '8px'
                 }}
               />

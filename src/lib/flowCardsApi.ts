@@ -15,6 +15,7 @@ type FlowCardRow = {
   quantity: number;
   entry_value: number;
   received_value: number;
+  payment_method?: string | null;
   product_id: string | null;
   category: string | null;
   status: FlowCard["status"];
@@ -41,6 +42,7 @@ function toDomain(row: FlowCardRow): FlowCard {
     quantity: row.quantity,
     entryValue: Number(row.entry_value),
     receivedValue: Number(row.received_value),
+    paymentMethod: row.payment_method ?? undefined,
     productId: row.product_id ?? undefined,
     productName: row.product?.[0]?.name ?? undefined,
     category: row.category ?? undefined,
@@ -59,6 +61,18 @@ function toDomain(row: FlowCardRow): FlowCard {
 }
 
 function toRowInsert(card: Omit<FlowCard, "id" | "createdAt" | "updatedAt">) {
+  // Se o formulário informar um horário explícito da venda, usamos isso
+  // para definir o created_at (mantendo data + horário escolhidos).
+  let created_at: string | undefined;
+  if (card.date && card.occurredAtTime) {
+    try {
+      const iso = new Date(`${card.date}T${card.occurredAtTime}:00`).toISOString();
+      created_at = iso;
+    } catch {
+      created_at = undefined;
+    }
+  }
+
   return {
     date: card.date,
     client_name: card.clientName,
@@ -67,6 +81,7 @@ function toRowInsert(card: Omit<FlowCard, "id" | "createdAt" | "updatedAt">) {
     quantity: card.quantity,
     entry_value: card.entryValue,
     received_value: card.receivedValue,
+    payment_method: card.paymentMethod ?? "",
     product_id: card.productId ?? null,
     // coluna category é NOT NULL no banco (legado) — manter string vazia quando não usar
     category: card.category ?? "",
@@ -79,6 +94,8 @@ function toRowInsert(card: Omit<FlowCard, "id" | "createdAt" | "updatedAt">) {
     production_responsible_name: card.productionResponsibleName || null,
     deadline: card.deadline || null,
     notes: card.notes || null,
+    // Permite sobrescrever o horário de criação com o horário real da venda
+    created_at,
   };
 }
 
@@ -88,7 +105,7 @@ export async function listFlowCards(): Promise<FlowCard[]> {
   const { data, error } = await supabase
     .from("flow_cards")
     .select(
-      "id,date,client_name,whatsapp,leads_count,quantity,entry_value,received_value,product_id,category,status,created_by_id,created_by_name,attendant_id,attendant_name,production_responsible_id,production_responsible_name,deadline,notes,created_at,updated_at,product:products(name)"
+      "id,date,client_name,whatsapp,leads_count,quantity,entry_value,received_value,payment_method,product_id,category,status,created_by_id,created_by_name,attendant_id,attendant_name,production_responsible_id,production_responsible_name,deadline,notes,created_at,updated_at,product:products(name)"
     )
     .order("updated_at", { ascending: false });
 
@@ -102,7 +119,7 @@ export async function createFlowCard(card: Omit<FlowCard, "id" | "createdAt" | "
     .from("flow_cards")
     .insert(toRowInsert(card))
     .select(
-      "id,date,client_name,whatsapp,leads_count,quantity,entry_value,received_value,product_id,category,status,created_by_id,created_by_name,attendant_id,attendant_name,production_responsible_id,production_responsible_name,deadline,notes,created_at,updated_at,product:products(name)"
+      "id,date,client_name,whatsapp,leads_count,quantity,entry_value,received_value,payment_method,product_id,category,status,created_by_id,created_by_name,attendant_id,attendant_name,production_responsible_id,production_responsible_name,deadline,notes,created_at,updated_at,product:products(name)"
     )
     .single();
 
@@ -120,6 +137,7 @@ export async function updateFlowCard(id: string, patch: Partial<Omit<FlowCard, "
   if (patch.quantity !== undefined) rowPatch.quantity = patch.quantity;
   if (patch.entryValue !== undefined) rowPatch.entry_value = patch.entryValue;
   if (patch.receivedValue !== undefined) rowPatch.received_value = patch.receivedValue;
+  if (patch.paymentMethod !== undefined) rowPatch.payment_method = patch.paymentMethod ?? "";
   if (patch.productId !== undefined) rowPatch.product_id = patch.productId ?? null;
   if (patch.category !== undefined) rowPatch.category = patch.category ?? null;
   if (patch.status !== undefined) rowPatch.status = patch.status;
@@ -137,7 +155,7 @@ export async function updateFlowCard(id: string, patch: Partial<Omit<FlowCard, "
     .update(rowPatch)
     .eq("id", id)
     .select(
-      "id,date,client_name,whatsapp,leads_count,quantity,entry_value,received_value,product_id,category,status,created_by_id,created_by_name,attendant_id,attendant_name,production_responsible_id,production_responsible_name,deadline,notes,created_at,updated_at,product:products(name)"
+      "id,date,client_name,whatsapp,leads_count,quantity,entry_value,received_value,payment_method,product_id,category,status,created_by_id,created_by_name,attendant_id,attendant_name,production_responsible_id,production_responsible_name,deadline,notes,created_at,updated_at,product:products(name)"
     )
     .single();
 

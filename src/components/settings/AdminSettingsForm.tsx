@@ -229,19 +229,6 @@ export function AdminSettingsForm({ settings, setSettings }: Props) {
         </div>
       </motion.div>
 
-      {/* Info Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="mt-6 p-4 rounded-lg bg-primary/10 border border-primary/20"
-      >
-        <h4 className="font-medium text-primary mb-2">💡 Dica</h4>
-        <p className="text-sm text-muted-foreground">
-          As configurações definidas aqui afetam diretamente os cálculos financeiros do sistema. A taxa de imposto é aplicada
-          automaticamente para calcular o lucro líquido real.
-        </p>
-      </motion.div>
     </div>
   );
 }

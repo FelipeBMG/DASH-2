@@ -6,6 +6,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Transaction } from '@/types/axion';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 const incomeCategories = [
   'Projeto',
@@ -32,20 +35,27 @@ interface TransactionFormProps {
 
 export function TransactionForm({ defaultType = 'income', transaction }: TransactionFormProps) {
   const { setTransactions, closeModal } = useAxion();
+  const qc = useQueryClient();
+  const { toast } = useToast();
   const isEditing = !!transaction;
+  const [saving, setSaving] = useState(false);
   
   const [formData, setFormData] = useState({
     type: transaction?.type || defaultType,
     category: transaction?.category || '',
     description: transaction?.description || '',
     value: transaction?.value?.toString() || '',
+    pendingValue: transaction?.pendingValue?.toString() || '',
     date: transaction?.date || new Date().toISOString().split('T')[0],
   });
 
   const categories = formData.type === 'income' ? incomeCategories : expenseCategories;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (saving) return;
+    setSaving(true);
     
     const transactionData: Transaction = {
       id: transaction?.id || crypto.randomUUID(),
@@ -53,6 +63,8 @@ export function TransactionForm({ defaultType = 'income', transaction }: Transac
       category: formData.category,
       description: formData.description,
       value: parseFloat(formData.value) || 0,
+      receivedValue: parseFloat(formData.value) || 0,
+      pendingValue: formData.type === 'income' ? (parseFloat(formData.pendingValue) || 0) : 0,
       date: formData.date,
       projectId: transaction?.projectId,
     };
@@ -62,7 +74,52 @@ export function TransactionForm({ defaultType = 'income', transaction }: Transac
     } else {
       setTransactions(prev => [...prev, transactionData]);
     }
-    closeModal();
+
+    // Persistir no Supabase para alimentar Dashboard/Relatórios
+    try {
+      const { error } = await supabase
+        .from('financial_transactions')
+        .upsert(
+          {
+            id: transactionData.id,
+            type: transactionData.type,
+            category: transactionData.category,
+            cost_center: 'Geral',
+            description: transactionData.description,
+            // Conforme definido: `value` = valor recebido
+            value: Number(transactionData.receivedValue) || 0,
+            received_value: Number(transactionData.receivedValue) || 0,
+            pending_value: Number(transactionData.pendingValue) || 0,
+            date: transactionData.date,
+          },
+          { onConflict: 'id' },
+        );
+
+      if (error) {
+        console.error('[TransactionForm] upsert financial_transactions failed:', error);
+        toast({
+          title: 'Não foi possível salvar no Financeiro (Supabase)',
+          description: error.message,
+          variant: 'destructive',
+        });
+        setSaving(false);
+        return;
+      }
+
+      void qc.invalidateQueries({ queryKey: ['financial_transactions'] });
+      closeModal();
+    } catch (err) {
+      console.error('[TransactionForm] unexpected error saving financial_transactions:', err);
+      toast({
+        title: 'Erro inesperado ao salvar',
+        description: err instanceof Error ? err.message : 'Tente novamente.',
+        variant: 'destructive',
+      });
+      setSaving(false);
+      return;
+    }
+
+    setSaving(false);
   };
 
   return (
@@ -79,7 +136,14 @@ export function TransactionForm({ defaultType = 'income', transaction }: Transac
             <Label htmlFor="type">Tipo</Label>
             <Select
               value={formData.type}
-              onValueChange={(value: 'income' | 'expense') => setFormData({ ...formData, type: value, category: '' })}
+              onValueChange={(value: 'income' | 'expense') =>
+                setFormData({
+                  ...formData,
+                  type: value,
+                  category: '',
+                  pendingValue: value === 'income' ? formData.pendingValue : '',
+                })
+              }
             >
               <SelectTrigger className="input-dark mt-1.5">
                 <SelectValue />
@@ -111,7 +175,7 @@ export function TransactionForm({ defaultType = 'income', transaction }: Transac
           </div>
 
           <div>
-            <Label htmlFor="value">Valor (R$)</Label>
+            <Label htmlFor="value">{formData.type === 'income' ? 'Valor recebido (R$)' : 'Valor (R$)'}</Label>
             <Input
               id="value"
               type="number"
@@ -123,6 +187,24 @@ export function TransactionForm({ defaultType = 'income', transaction }: Transac
               required
             />
           </div>
+
+          {formData.type === 'income' ? (
+            <div>
+              <Label htmlFor="pendingValue">Valor a receber (R$)</Label>
+              <Input
+                id="pendingValue"
+                type="number"
+                step="0.01"
+                value={formData.pendingValue}
+                onChange={(e) => setFormData({ ...formData, pendingValue: e.target.value })}
+                placeholder="0,00"
+                className="input-dark mt-1.5"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Opcional — se vazio, fica 0.
+              </p>
+            </div>
+          ) : null}
 
           <div>
             <Label htmlFor="date">Data</Label>
@@ -153,7 +235,7 @@ export function TransactionForm({ defaultType = 'income', transaction }: Transac
           <Button type="button" variant="outline" onClick={closeModal}>
             Cancelar
           </Button>
-          <Button type="submit" className="btn-primary">
+          <Button type="submit" className="btn-primary" disabled={saving}>
             {isEditing ? 'Salvar Alterações' : 'Registrar'}
           </Button>
         </div>

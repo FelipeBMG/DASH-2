@@ -1,18 +1,25 @@
 import { motion } from "framer-motion";
 import { Bell, Search } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export function VendedorHeader({ title }: { title: string }) {
+type Props = {
+  title: string;
+  leftSlot?: ReactNode;
+};
+
+export function VendedorHeader({ title, leftSlot }: Props) {
   return (
     <motion.header
       initial={{ y: -10, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       className="h-16 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-40"
     >
-      <div className="h-full px-6 flex items-center justify-between">
-        <div>
+      <div className="h-full px-4 md:px-6 flex items-center justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          {leftSlot ? <div className="shrink-0">{leftSlot}</div> : null}
           <h1 className="text-xl font-semibold text-foreground">{title}</h1>
         </div>
 

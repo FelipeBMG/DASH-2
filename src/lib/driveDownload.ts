@@ -4,8 +4,14 @@ export async function downloadDriveFile(args: {
   accessToken: string;
   fileId: string;
   fileName: string;
+  mimeType?: string;
 }): Promise<void> {
-  const url = `${SUPABASE_URL}/functions/v1/drive-download?fileId=${encodeURIComponent(args.fileId)}`;
+  const qs = new URLSearchParams();
+  qs.set("fileId", args.fileId);
+  // Otimização: enviar nome/mime para a função pular o request de metadata no Drive
+  if (args.fileName) qs.set("fileName", args.fileName);
+  if (args.mimeType) qs.set("mimeType", args.mimeType);
+  const url = `${SUPABASE_URL}/functions/v1/drive-download?${qs.toString()}`;
   const res = await fetch(url, {
     method: "GET",
     headers: {

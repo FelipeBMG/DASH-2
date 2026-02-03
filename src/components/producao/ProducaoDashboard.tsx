@@ -7,12 +7,14 @@ import { ProducaoLayout } from "@/components/producao/ProducaoLayout";
 import { ProducaoSettingsPanel } from "@/components/producao/ProducaoSettingsPanel";
 import type { ProducaoSection } from "@/components/producao/types";
 import { FluxoOperacoesModule } from "@/components/fluxo/FluxoOperacoesModule";
+import { ProducaoSalesPanel } from "@/components/producao/ProducaoSalesPanel";
 
 export function ProducaoDashboard() {
   const [activeSection, setActiveSection] = useState<ProducaoSection>("fluxo");
 
   const title = useMemo(() => {
     if (activeSection === "fluxo") return "Produção — Fluxo";
+    if (activeSection === "sales") return "Produção — Vendas";
     if (activeSection === "lista") return "Produção — Projetos";
     if (activeSection === "calendario") return "Produção — Calendário";
     if (activeSection === "settings") return "Produção — Configurações";
@@ -22,6 +24,7 @@ export function ProducaoDashboard() {
   return (
     <ProducaoLayout title={title} activeSection={activeSection} onChangeSection={setActiveSection}>
       {activeSection === "fluxo" ? <FluxoOperacoesModule /> : null}
+      {activeSection === "sales" ? <ProducaoSalesPanel /> : null}
       {activeSection === "kanban" ? <ProductionKanban /> : null}
       {activeSection === "lista" ? <ProductionProjectsList /> : null}
       {activeSection === "calendario" ? <CalendarModule /> : null}

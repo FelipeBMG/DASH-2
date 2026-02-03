@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,15 +17,64 @@ import { useFlowCollaborators } from '@/hooks/useFlowCollaborators';
 import { Badge } from '@/components/ui/badge';
 import { downloadDriveFile } from '@/lib/driveDownload';
 import { useProducts } from '@/hooks/useProducts';
+import { useToast } from '@/hooks/use-toast';
 
 interface FlowCardFormProps {
   card?: FlowCard;
   attachments?: FlowCardAttachment[];
   onSubmit: (
     card: Omit<FlowCard, 'id' | 'createdAt' | 'updatedAt'>,
-    files: { image?: File | null; audio?: File | null; other?: File | null }
+    files: { images: File[]; audios: File[]; others: File[] }
   ) => void;
   onCancel: () => void;
+}
+
+function formatMoneyPtBr(value: number): string {
+  if (!Number.isFinite(value)) return '';
+  // Não usa Intl aqui para evitar inserir separador de milhar durante a edição.
+  return value.toFixed(2).replace('.', ',');
+}
+
+function parseMoneyInputToNumber(raw: string): number {
+  const cleaned = (raw ?? '').trim();
+  if (!cleaned) return 0;
+
+  // Mantém somente dígitos e separadores.
+  const just = cleaned.replace(/[^0-9.,]/g, '');
+  if (!just) return 0;
+
+  const lastComma = just.lastIndexOf(',');
+  const lastDot = just.lastIndexOf('.');
+  const sepIndex = Math.max(lastComma, lastDot);
+
+  let intPart = '';
+  let decPart = '';
+  if (sepIndex >= 0) {
+    intPart = just.slice(0, sepIndex).replace(/[.,]/g, '');
+    decPart = just.slice(sepIndex + 1).replace(/[.,]/g, '');
+  } else {
+    intPart = just.replace(/[.,]/g, '');
+  }
+
+  if (!intPart && !decPart) return 0;
+  const normalized = decPart ? `${intPart || '0'}.${decPart}` : (intPart || '0');
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function sanitizeMoneyInput(raw: string): string {
+  // Permite digitação fluida:  "80,"  "80."  "80,5"  "80.5"
+  // Remove letras/símbolos e limita a 1 separador decimal.
+  const allowed = (raw ?? '').replace(/[^0-9.,]/g, '');
+  const lastComma = allowed.lastIndexOf(',');
+  const lastDot = allowed.lastIndexOf('.');
+  const sepIndex = Math.max(lastComma, lastDot);
+  if (sepIndex < 0) return allowed;
+
+  const before = allowed.slice(0, sepIndex).replace(/[.,]/g, '');
+  const after = allowed.slice(sepIndex + 1).replace(/[.,]/g, '');
+  const sep = sepIndex === lastComma ? ',' : '.';
+  return `${before}${sep}${after}`;
 }
 
 const statusOptions: { value: FlowCardStatus; label: string }[] = [
@@ -42,6 +91,7 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
   const { user: authUser, session } = useAuth();
   const { sellerOptions, productionOptions } = useFlowCollaborators();
   const { data: products = [] } = useProducts({ activeOnly: true });
+  const { toast } = useToast();
 
   const downloadAttachment = useCallback(
     async (a: FlowCardAttachment) => {
@@ -59,6 +109,13 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
 
   // Mantém os campos no modelo do card (para compatibilidade), mas não renderiza no form.
   // (pedido: remover “Leads” e “Quantidade”)
+
+  const initialTime = (() => {
+    const iso = card?.updatedAt || card?.createdAt || new Date().toISOString();
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return new Date();
+    return d;
+  })();
 
   const [formData, setFormData] = useState({
     date: card?.date || new Date().toISOString().split('T')[0],
@@ -79,39 +136,36 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
     productionResponsibleName: card?.productionResponsibleName || '',
     deadline: card?.deadline || '',
     notes: card?.notes || '',
+    occurredAtTime:
+      card?.occurredAtTime ||
+      `${String(initialTime.getHours()).padStart(2, '0')}:${String(initialTime.getMinutes()).padStart(2, '0')}`,
   });
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [otherFile, setOtherFile] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [entryValueText, setEntryValueText] = useState<string>(formatMoneyPtBr(card?.entryValue ?? 0));
+  const [receivedValueText, setReceivedValueText] = useState<string>(formatMoneyPtBr(card?.receivedValue ?? 0));
+  const [signalPercent, setSignalPercent] = useState<string>('');
+
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [audioFiles, setAudioFiles] = useState<File[]>([]);
+  const [otherFiles, setOtherFiles] = useState<File[]>([]);
 
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Auto-calculate receivedValue when totalValue or signalPercent changes
   useEffect(() => {
-    if (!imageFile) {
-      setImagePreviewUrl(null);
-      return;
+    const total = parseMoneyInputToNumber(entryValueText);
+    const percent = parseFloat(signalPercent || '0');
+    if (total > 0 && percent >= 0 && percent <= 100) {
+      const calculated = (total * percent) / 100;
+      setReceivedValueText(formatMoneyPtBr(calculated));
+      setFormData((prev) => ({ ...prev, receivedValue: calculated }));
+    } else if (percent === 0 || signalPercent === '') {
+      setReceivedValueText('0,00');
+      setFormData((prev) => ({ ...prev, receivedValue: 0 }));
     }
-
-    const url = URL.createObjectURL(imageFile);
-    setImagePreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [imageFile]);
-
-  useEffect(() => {
-    if (!audioFile) {
-      setAudioPreviewUrl(null);
-      return;
-    }
-
-    const url = URL.createObjectURL(audioFile);
-    setAudioPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [audioFile]);
+  }, [entryValueText, signalPercent]);
 
   const hasSellerOptions = useMemo(() => sellerOptions.length > 0, [sellerOptions.length]);
   const hasProductionOptions = useMemo(() => productionOptions.length > 0, [productionOptions.length]);
@@ -146,6 +200,7 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
 
   const setQuickEntryValue = useCallback((value: number) => {
     setFormData((prev) => ({ ...prev, entryValue: value }));
+    setEntryValueText(formatMoneyPtBr(value));
   }, []);
 
   // manter compatibilidade: se algum lugar ainda usa `team` para outras coisas
@@ -154,14 +209,20 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const parsedEntry = parseMoneyInputToNumber(entryValueText);
+    const parsedReceived = parseMoneyInputToNumber(receivedValueText);
+
     onSubmit(
       {
         ...formData,
+        entryValue: parsedEntry,
+        receivedValue: parsedReceived,
         productId: formData.productId ? formData.productId : undefined,
         // category é legado e NOT NULL no banco: mantenha string vazia quando não usado
         category: formData.category ?? "",
       },
-      { image: imageFile, audio: audioFile, other: otherFile }
+      { images: imageFiles, audios: audioFiles, others: otherFiles }
     );
   };
 
@@ -210,7 +271,11 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
                         onClick={() => {
                           void downloadAttachment(a).catch((err: unknown) => {
                             const msg = err instanceof Error ? err.message : 'Erro ao baixar arquivo';
-                            alert(msg);
+                            toast({
+                              title: 'Falha no download',
+                              description: msg,
+                              variant: 'destructive',
+                            });
                           });
                         }}
                       >
@@ -226,7 +291,7 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
           </div>
         ) : null}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <div className="space-y-2 min-w-0">
             <Label>Data</Label>
           <Input
@@ -235,6 +300,21 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
             onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
             required
           />
+          </div>
+
+          <div className="space-y-2 min-w-0">
+            <Label>Horário da venda</Label>
+            <Input
+              type="time"
+              value={formData.occurredAtTime}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  occurredAtTime: e.target.value,
+                }))
+              }
+              required
+            />
           </div>
 
           <div className="space-y-2 min-w-0">
@@ -282,16 +362,18 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
 
         <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-3">
           <div className="space-y-2 min-w-0 md:col-span-2 lg:col-span-2">
-            <Label>Valor de Entrada (R$)</Label>
+            <Label>Valor Total (R$)</Label>
             <Input
               inputMode="decimal"
-              placeholder="Ex: 80,00"
-              value={String(formData.entryValue).replace('.', ',')}
+              placeholder="Ex: 100,00"
+              value={entryValueText}
               onChange={(e) => {
-                const raw = e.target.value;
-                const normalized = raw.replace(',', '.').replace(/[^0-9.]/g, '');
-                const n = Number(normalized);
-                setFormData((prev) => ({ ...prev, entryValue: Number.isFinite(n) ? n : 0 }));
+                setEntryValueText(sanitizeMoneyInput(e.target.value));
+              }}
+              onBlur={() => {
+                const n = parseMoneyInputToNumber(entryValueText);
+                setFormData((prev) => ({ ...prev, entryValue: n }));
+                setEntryValueText(formatMoneyPtBr(n));
               }}
             />
 
@@ -308,19 +390,47 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
             </div>
           </div>
 
+          <div className="space-y-2 min-w-0 md:col-span-1 lg:col-span-1">
+            <Label>% Sinal Pago</Label>
+            <Input
+              type="number"
+              placeholder="0"
+              min="0"
+              max="100"
+              step="0.01"
+              value={signalPercent}
+              onChange={(e) => setSignalPercent(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Digite o % do sinal</p>
+          </div>
+
           <div className="space-y-2 min-w-0 md:col-span-2 lg:col-span-2">
             <Label>Já Recebido (R$)</Label>
             <Input
               inputMode="decimal"
-              placeholder="Ex: 30,00"
-              value={String(formData.receivedValue).replace('.', ',')}
+              placeholder="Ex: 50,00"
+              value={receivedValueText}
               onChange={(e) => {
-                const raw = e.target.value;
-                const normalized = raw.replace(',', '.').replace(/[^0-9.]/g, '');
-                const n = Number(normalized);
-                setFormData((prev) => ({ ...prev, receivedValue: Number.isFinite(n) ? n : 0 }));
+                setReceivedValueText(sanitizeMoneyInput(e.target.value));
+              }}
+              onBlur={() => {
+                const n = parseMoneyInputToNumber(receivedValueText);
+                setFormData((prev) => ({ ...prev, receivedValue: n }));
+                setReceivedValueText(formatMoneyPtBr(n));
+                
+                // Calculate % signal when user manually enters received value
+                const total = parseMoneyInputToNumber(entryValueText);
+                if (total > 0 && n >= 0) {
+                  const percent = (n / total) * 100;
+                  setSignalPercent(percent.toFixed(2));
+                } else if (n === 0) {
+                  setSignalPercent('0');
+                }
               }}
             />
+            <p className="text-xs text-muted-foreground">
+              Calculado automaticamente pelo % de sinal, ou digite manualmente
+            </p>
           </div>
 
           <div className="space-y-2 min-w-0 md:col-span-1">
@@ -349,6 +459,10 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
                     shouldAutofillEntryValue && selected && Number.isFinite(selected.price) && selected.price > 0
                       ? selected.price
                       : p.entryValue;
+
+                  if (shouldAutofillEntryValue && nextEntryValue !== p.entryValue) {
+                    setEntryValueText(formatMoneyPtBr(nextEntryValue));
+                  }
 
                   return {
                     ...p,
@@ -386,21 +500,24 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
                   ref={imageInputRef}
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
-                  onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => setImageFiles(Array.from(e.target.files ?? []))}
                 />
                 <input
                   ref={audioInputRef}
                   type="file"
                   accept="audio/*"
+                  multiple
                   className="hidden"
-                  onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => setAudioFiles(Array.from(e.target.files ?? []))}
                 />
                 <input
                   ref={fileInputRef}
                   type="file"
+                  multiple
                   className="hidden"
-                  onChange={(e) => setOtherFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => setOtherFiles(Array.from(e.target.files ?? []))}
                 />
 
                 <Button
@@ -433,10 +550,16 @@ export function FlowCardForm({ card, attachments = [], onSubmit, onCancel }: Flo
               </div>
 
               <div className="mt-2 grid gap-1 text-[11px] text-muted-foreground">
-                {imageFile ? <p className="truncate">Imagem: {imageFile.name}</p> : null}
-                {audioFile ? <p className="truncate">Áudio: {audioFile.name}</p> : null}
-                {otherFile ? <p className="truncate">Arquivo: {otherFile.name}</p> : null}
-                {!imageFile && !audioFile && !otherFile ? <p>Nenhum arquivo selecionado.</p> : null}
+                {imageFiles.length ? (
+                  <p className="truncate">Imagens: {imageFiles.length} arquivo(s)</p>
+                ) : null}
+                {audioFiles.length ? (
+                  <p className="truncate">Áudios: {audioFiles.length} arquivo(s)</p>
+                ) : null}
+                {otherFiles.length ? (
+                  <p className="truncate">Arquivos: {otherFiles.length} arquivo(s)</p>
+                ) : null}
+                {!imageFiles.length && !audioFiles.length && !otherFiles.length ? <p>Nenhum arquivo selecionado.</p> : null}
               </div>
             </div>
           </div>

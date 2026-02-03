@@ -1,1 +1,1 @@
-export type ProducaoSection = "fluxo" | "kanban" | "lista" | "calendario" | "settings";
+export type ProducaoSection = "fluxo" | "sales" | "kanban" | "lista" | "calendario" | "settings";

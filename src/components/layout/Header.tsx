@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { addDays, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { DateRange as DayPickerRange } from "react-day-picker";
@@ -22,7 +23,11 @@ const moduleTitles: Record<string, string> = {
   settings: 'Configurações do Sistema',
 };
 
-export function Header() {
+type Props = {
+  leftSlot?: ReactNode;
+};
+
+export function Header({ leftSlot }: Props) {
   const { activeModule, dateRange, setDateRange } = useAxion();
 
   const toISO = (d: Date) => d.toISOString().split("T")[0];
@@ -111,16 +116,17 @@ export function Header() {
       animate={{ y: 0, opacity: 1 }}
       className="h-16 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-40"
     >
-      <div className="h-full px-6 flex items-center justify-between">
+      <div className="h-full px-4 md:px-6 flex items-center justify-between">
         {/* Title */}
-        <div>
+        <div className="flex items-center gap-3 min-w-0">
+          {leftSlot ? <div className="shrink-0">{leftSlot}</div> : null}
           <h1 className="text-xl font-semibold text-foreground">
             {moduleTitles[activeModule]}
           </h1>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           {/* Range quick access (replaces search) */}
           <div className="hidden md:block">
             <Popover>
@@ -147,7 +153,7 @@ export function Header() {
           </div>
 
           {/* Date Range Filter (restored) */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border">
             <Calendar className="w-4 h-4 text-muted-foreground" />
 
             {/* Presets */}

@@ -63,12 +63,12 @@ export function CalendarModule() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-2xl font-bold text-foreground capitalize">
+          <h2 className="text-lg font-bold text-foreground capitalize">
             {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
           </h2>
-          <p className="text-muted-foreground">Visualize deadlines e eventos</p>
+          <p className="text-sm text-muted-foreground">Visualize deadlines e eventos</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="icon" onClick={handlePreviousMonth}>
@@ -84,14 +84,14 @@ export function CalendarModule() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex-1 glass-card p-6"
+        className="flex-1 glass-card p-3"
       >
         {/* Week Days Header */}
-        <div className="grid grid-cols-7 gap-2 mb-4">
+        <div className="grid grid-cols-7 gap-1 mb-2">
           {weekDays.map((day) => (
             <div 
               key={day} 
-              className="text-center text-sm font-medium text-muted-foreground py-2"
+              className="text-center text-[10px] font-medium text-muted-foreground py-1"
             >
               {day}
             </div>
@@ -99,7 +99,7 @@ export function CalendarModule() {
         </div>
 
         {/* Days Grid */}
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-1">
           {paddingDays.map((_, index) => (
             <div key={`padding-${index}`} className="aspect-square" />
           ))}
@@ -114,7 +114,7 @@ export function CalendarModule() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className={cn(
-                  "aspect-square p-2 rounded-lg border transition-all cursor-pointer",
+                  "aspect-square p-1 rounded-md border transition-all cursor-pointer",
                   isToday(day) 
                     ? "bg-primary/20 border-primary" 
                     : "border-border hover:border-primary/50 hover:bg-secondary/50",
@@ -123,7 +123,7 @@ export function CalendarModule() {
               >
                 <div className="flex flex-col h-full">
                   <span className={cn(
-                    "text-sm font-medium",
+                    "text-[10px] font-medium",
                     isToday(day) ? "text-primary" : "text-foreground"
                   )}>
                     {format(day, 'd')}
@@ -134,14 +134,14 @@ export function CalendarModule() {
                       {dayEvents.slice(0, 2).map((event) => (
                         <div
                           key={event.id}
-                          className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-warning/20 text-warning text-[10px] truncate"
+                          className="flex items-center gap-1 px-1 py-0.5 rounded bg-warning/20 text-warning text-[8px] truncate"
                         >
-                          <FolderKanban className="w-2.5 h-2.5 flex-shrink-0" />
+                          <FolderKanban className="w-2 h-2 flex-shrink-0" />
                           <span className="truncate">{event.title}</span>
                         </div>
                       ))}
                       {dayEvents.length > 2 && (
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[8px] text-muted-foreground">
                           +{dayEvents.length - 2} mais
                         </span>
                       )}
@@ -155,14 +155,14 @@ export function CalendarModule() {
       </motion.div>
 
       {/* Legend */}
-      <div className="mt-4 flex items-center gap-6">
+      <div className="mt-3 flex items-center gap-5">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-primary" />
-          <span className="text-sm text-muted-foreground">Hoje</span>
+          <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+          <span className="text-xs text-muted-foreground">Hoje</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-warning" />
-          <span className="text-sm text-muted-foreground">Deadline</span>
+          <div className="w-2.5 h-2.5 rounded-full bg-warning" />
+          <span className="text-xs text-muted-foreground">Deadline</span>
         </div>
       </div>
     </div>

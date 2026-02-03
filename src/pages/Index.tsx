@@ -9,6 +9,7 @@ import { TeamModule } from '@/components/team/TeamModule';
 import { ContractsModule } from '@/components/contracts/ContractsModule';
 import { SettingsModule } from '@/components/settings/SettingsModule';
 import { TrafficModule } from '@/components/traffic/TrafficModule';
+import { SalesModule } from '@/components/sales/SalesModule';
 
 function AxionContent() {
   const { activeModule } = useAxion();
@@ -31,6 +32,8 @@ function AxionContent() {
         return <TeamModule />;
       case 'contracts':
         return <ContractsModule />;
+      case 'sales':
+        return <SalesModule />;
       case 'settings':
         return <SettingsModule />;
       default:

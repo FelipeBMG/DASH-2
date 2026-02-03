@@ -7,6 +7,10 @@ export type FinancialTransaction = {
   costCenter: string;
   description: string;
   value: number;
+  /** Valor efetivamente recebido (para entradas). */
+  receivedValue: number;
+  /** Valor pendente a receber (para entradas). */
+  pendingValue: number;
   date: string; // yyyy-mm-dd
   createdAt: string;
   updatedAt: string;
@@ -20,6 +24,8 @@ type FinancialTransactionRow = {
   description: string;
   value: number;
   date: string;
+  received_value: number;
+  pending_value: number;
   created_at: string;
   updated_at: string;
 };
@@ -32,6 +38,8 @@ function toDomain(row: FinancialTransactionRow): FinancialTransaction {
     costCenter: row.cost_center,
     description: row.description,
     value: Number(row.value),
+    receivedValue: Number(row.received_value ?? row.value ?? 0),
+    pendingValue: Number(row.pending_value ?? 0),
     date: row.date,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -44,7 +52,9 @@ export async function listFinancialTransactions(): Promise<FinancialTransaction[
 
   const { data, error } = await supabase
     .from("financial_transactions")
-    .select("id,type,category,cost_center,description,value,date,created_at,updated_at")
+    .select(
+      "id,type,category,cost_center,description,value,received_value,pending_value,date,created_at,updated_at",
+    )
     .order("date", { ascending: false });
 
   if (error) throw error;

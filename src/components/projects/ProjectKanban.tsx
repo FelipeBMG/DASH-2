@@ -24,6 +24,7 @@ import type { Project } from '@/types/axion';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 
 type ProjectStatus = 'backlog' | 'production' | 'review' | 'completed';
 
@@ -44,6 +45,8 @@ const formatCurrency = (value: number) => {
 export function ProjectKanban() {
   const { projects, setProjects, openModal } = useAxion();
   const [draggedProject, setDraggedProject] = useState<Project | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pendingDeleteProjectId, setPendingDeleteProjectId] = useState<string | null>(null);
 
   const handleDragStart = (project: Project) => {
     setDraggedProject(project);
@@ -79,9 +82,8 @@ export function ProjectKanban() {
   };
 
   const handleDeleteProject = (projectId: string) => {
-    if (confirm('Tem certeza que deseja excluir este projeto?')) {
-      setProjects(prev => prev.filter(p => p.id !== projectId));
-    }
+    setPendingDeleteProjectId(projectId);
+    setDeleteDialogOpen(true);
   };
 
   const getProjectsByStatus = (status: ProjectStatus) => {
@@ -90,6 +92,24 @@ export function ProjectKanban() {
 
   return (
     <div className="h-full flex flex-col">
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setPendingDeleteProjectId(null);
+        }}
+        title="Excluir projeto?"
+        description="Essa ação não pode ser desfeita."
+        cancelText="Cancelar"
+        confirmText="Excluir"
+        confirmVariant="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        onConfirm={() => {
+          if (!pendingDeleteProjectId) return;
+          setProjects((prev) => prev.filter((p) => p.id !== pendingDeleteProjectId));
+          setDeleteDialogOpen(false);
+          setPendingDeleteProjectId(null);
+        }}
+      />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -227,3 +247,4 @@ export function ProjectKanban() {
     </div>
   );
 }
+

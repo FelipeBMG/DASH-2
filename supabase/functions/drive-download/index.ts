@@ -8,7 +8,14 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+let cachedGoogleAccessToken: { token: string; expiresAtMs: number } | null = null;
+
 async function getAccessTokenFromRefreshToken(): Promise<string> {
+  // Cache simples por instância (reduz ~1 request por download quando a função está "quente")
+  if (cachedGoogleAccessToken && Date.now() < cachedGoogleAccessToken.expiresAtMs - 30_000) {
+    return cachedGoogleAccessToken.token;
+  }
+
   const clientId = Deno.env.get("GOOGLE_DRIVE_OAUTH_CLIENT_ID");
   if (!clientId) throw new Error("GOOGLE_DRIVE_OAUTH_CLIENT_ID is not configured");
 
@@ -33,7 +40,15 @@ async function getAccessTokenFromRefreshToken(): Promise<string> {
   if (!res.ok || !data?.access_token) {
     throw new Error(`GOOGLE_OAUTH_REFRESH_FAILED[${res.status}]: ${JSON.stringify(data)}`);
   }
-  return String(data.access_token);
+
+  const token = String(data.access_token);
+  const expiresInSec = typeof data?.expires_in === "number" ? data.expires_in : 3600;
+  cachedGoogleAccessToken = {
+    token,
+    expiresAtMs: Date.now() + expiresInSec * 1000,
+  };
+
+  return token;
 }
 
 async function requireUser(req: Request) {
@@ -72,21 +87,30 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Otimização: permitir passar nome/mime pelo client para pular a chamada de metadata
+    const fileNameParam = url.searchParams.get("fileName")?.trim();
+    const mimeTypeParam = url.searchParams.get("mimeType")?.trim();
+
     const accessToken = await getAccessTokenFromRefreshToken();
 
-    // 1) metadata (to get filename + mime)
-    const metaRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=name,mimeType`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
-    );
-    const meta = await metaRes.json().catch(() => ({}));
-    if (!metaRes.ok) {
-      throw new Error(`DRIVE_META_FAILED[${metaRes.status}]: ${JSON.stringify(meta)}`);
+    let fileName = fileNameParam || "arquivo";
+    let mimeType = mimeTypeParam || "application/octet-stream";
+
+    // Fallback: se não vier do client, busca metadata (mantém compatibilidade)
+    if (!fileNameParam || !mimeTypeParam) {
+      const metaRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=name,mimeType`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+      const meta = await metaRes.json().catch(() => ({}));
+      if (!metaRes.ok) {
+        throw new Error(`DRIVE_META_FAILED[${metaRes.status}]: ${JSON.stringify(meta)}`);
+      }
+      fileName = typeof meta?.name === "string" ? meta.name : fileName;
+      mimeType = typeof meta?.mimeType === "string" ? meta.mimeType : mimeType;
     }
-    const fileName = typeof meta?.name === "string" ? meta.name : "arquivo";
-    const mimeType = typeof meta?.mimeType === "string" ? meta.mimeType : "application/octet-stream";
 
     // 2) file content
     const fileRes = await fetch(
